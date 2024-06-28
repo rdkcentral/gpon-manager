@@ -157,7 +157,6 @@ static void _print_stack_backtrace(void)
 }
 
 static void daemonize(void) {
-    int fd;
     switch (fork()) {
     case 0:
         break;
@@ -237,7 +236,6 @@ void sig_handler(int sig)
 
 int main(int argc, char* argv[])
 {
-    ANSC_STATUS                     returnStatus       = ANSC_STATUS_SUCCESS;
     BOOL                            bRunAsDaemon       = TRUE;
     int                             cmdChar            = 0;
     int                             idx                = 0;

@@ -64,7 +64,6 @@ extern void * g_pDslhDmlAgent;
 
 ANSC_HANDLE GponMgrDml_create ( VOID )
 {
-    ANSC_STATUS                 returnStatus = ANSC_STATUS_SUCCESS;
     PDATAMODEL_GPON_SERVICES    pMyObject    = (PDATAMODEL_GPON_SERVICES)NULL;
 
     /*
@@ -120,7 +119,6 @@ ANSC_HANDLE GponMgrDml_create ( VOID )
 ANSC_STATUS GponMgrDml_Initialize ( ANSC_HANDLE hThisObject )
 {
     ANSC_STATUS                 returnStatus    = ANSC_STATUS_SUCCESS;
-    PDATAMODEL_GPON_SERVICES    pMyObject       = (PDATAMODEL_GPON_SERVICES)hThisObject;
 
     //Initialise dml data handler
     returnStatus = GponMgrDml_DataInit();

@@ -1614,7 +1614,7 @@ BOOL GponVeipEthFlowIngress_SetParamUlongValue(ANSC_HANDLE hInsContext, char* Pa
         {
             DML_VEIP* pGponVeip = &(pGponCtrl->dml);
 
-            snprintf(strValue,JSON_MAX_VAL_ARR_SIZE,"%ld",taggedValue[uValue]);
+            snprintf(strValue,JSON_MAX_VAL_ARR_SIZE,"%s",taggedValue[uValue]);
 
             /* check the parameter name and return the corresponding value */
             if (strcmp(ParamName, "Tagged") == 0)
@@ -1744,7 +1744,7 @@ BOOL GponVeipEthFlowEgress_SetParamUlongValue(ANSC_HANDLE hInsContext, char* Par
         {
             DML_VEIP* pGponVeip = &(pGponCtrl->dml);
 
-            snprintf(strValue,JSON_MAX_VAL_ARR_SIZE,"%ld",taggedValue[uValue]);
+            snprintf(strValue,JSON_MAX_VAL_ARR_SIZE,"%s",taggedValue[uValue]);
 
             /* check the parameter name and return the corresponding value */
             if (strcmp(ParamName, "Tagged") == 0)

@@ -26,7 +26,7 @@
 #include "gponmgr_controller.h"
 
 
-ANSC_STATUS GponMgr_InterfaceInit(PANSC_HANDLE hThisObject);
+ANSC_STATUS GponMgr_InternalControlInit();
 
 
 #endif  //_GPONMGR_DML_INTERNAL_H

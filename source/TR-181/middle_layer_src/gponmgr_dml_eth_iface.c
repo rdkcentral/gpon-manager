@@ -25,7 +25,6 @@
 
 static ANSC_STATUS Gponmgr_eth_getParams(char *pComponent, char *pBus, char *pParamName, char *pReturnVal)
 {
-    CCSP_MESSAGE_BUS_INFO *bus_info = (CCSP_MESSAGE_BUS_INFO *)bus_handle;
     parameterValStruct_t **retVal;
     char *ParamName[1];
     int ret = 0,
@@ -146,7 +145,7 @@ ANSC_STATUS Gponmgr_eth_setParams( char *pComponent, char *pBus, char *pParamNam
         pBus,
         0,
         0,
-        &param_val,
+        param_val,
         1,
         bCommitFlag,
         &faultParam);
@@ -215,7 +214,6 @@ ANSC_STATUS CosaDmlGponSetPhyStatusForWanManager(int iVeipIndex ,char *LowerLaye
     char ParamVal[256] = {0};
     char ifname[256] = {0};
     PDML_VEIP pGponVeip = NULL;
-    INT iLinkInstance = -1;
     INT iWANInstance = -1;
 
     if (PhyStatus == NULL)

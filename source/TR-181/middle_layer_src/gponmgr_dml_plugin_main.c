@@ -83,15 +83,12 @@ int ANSC_EXPORT_API GponMgrDml_Init(ULONG uMaxVersionSupported, void* hCosaPlugI
     COSASetParamValueBoolProc       pSetParamValueBoolProc      = (COSASetParamValueBoolProc         )NULL;
     COSAGetInstanceNumbersProc      pGetInstanceNumbersProc     = (COSAGetInstanceNumbersProc        )NULL;
 
-    COSAGetCommonHandleProc         pGetCHProc                  = (COSAGetCommonHandleProc           )NULL;
     COSAValidateHierarchyInterfaceProc
                                     pValInterfaceProc           = (COSAValidateHierarchyInterfaceProc)NULL;
     COSAGetHandleProc               pGetRegistryRootFolder      = (COSAGetHandleProc                 )NULL;
     COSAGetInstanceNumberByIndexProc
                                     pGetInsNumberByIndexProc    = (COSAGetInstanceNumberByIndexProc  )NULL;
-    COSAGetHandleProc               pGetMessageBusHandleProc    = (COSAGetHandleProc                 )NULL;
     COSAGetInterfaceByNameProc      pGetInterfaceByNameProc     = (COSAGetInterfaceByNameProc        )NULL;
-    ULONG                           ret                         = 0;
 
     if ( uMaxVersionSupported < THIS_PLUGIN_VERSION )
     {
@@ -320,7 +317,7 @@ int ANSC_EXPORT_API GponMgrDml_Init(ULONG uMaxVersionSupported, void* hCosaPlugI
     {
         char*   tmpSubsystemPrefix;
 
-        if ( tmpSubsystemPrefix = g_GetSubsystemPrefix(g_pDslhDmlAgent) )
+        if ( (tmpSubsystemPrefix = g_GetSubsystemPrefix(g_pDslhDmlAgent)) )
         {
             AnscCopyString(g_SubSysPrefix_Irep, tmpSubsystemPrefix);
         }

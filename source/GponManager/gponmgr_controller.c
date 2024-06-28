@@ -28,7 +28,7 @@ ANSC_STATUS GponMgr_subscribe_hal_events(void)
 {
     ANSC_STATUS ret = ANSC_STATUS_FAILURE;
     char strName[JSON_MAX_STR_ARR_SIZE]={0};
-    int idx = 0;
+    ULONG idx = 0;
 
     GPON_DML_DATA* pGponDmlData = GponMgrDml_GetData_locked();
     if(pGponDmlData != NULL)

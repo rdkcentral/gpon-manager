@@ -111,7 +111,6 @@ COSARepopulateTableProc            g_COSARepopulateTable;
 
 ANSC_HANDLE GponMgrDml_BackEndManagerCreate(VOID)
 {
-    ANSC_STATUS                returnStatus = ANSC_STATUS_SUCCESS;
     PBACKEND_MANAGER_OBJECT    pMyObject    = (PBACKEND_MANAGER_OBJECT)NULL;
 
     /*

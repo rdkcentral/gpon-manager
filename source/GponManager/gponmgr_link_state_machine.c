@@ -347,7 +347,6 @@ void GponMgr_Link_SM_Cleanup(GPON_LINK_SM_CTRL_T* gpon_sm_ctrl)
 ///////////////////////////////////////////////////
 void* GponMgr_Link_SM_Thread(void *arg)
 {
-    ANSC_STATUS ret;
     GPON_LINK_SM_CTRL_T* gpon_sm_ctrl = NULL;
     // event handler
     int sel = 0;

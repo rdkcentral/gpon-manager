@@ -39,7 +39,7 @@
 #define CHECK(expr)                                                \
     if (!(expr))                                                   \
     {                                                              \
-        CcspTraceError(("%s - %d Invalid parameter error \n!!!")); \
+        CcspTraceError(("%s - %d Invalid parameter error \n!!!", __FUNCTION__, __LINE__)); \
         return ANSC_STATUS_FAILURE;                                \
     }
 
@@ -98,8 +98,6 @@ ANSC_STATUS GponHal_get_data(void);
 ANSC_STATUS GponHal_Init()
 {
 #if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-    char wan_type[32] = {0};
-
     if (access("/bin/json_hal_server_gpon", F_OK) == 0)
     {
         v_secure_system("/bin/json_hal_server_gpon  /etc/rdk/conf/gpon_manager_wan_unify_conf.json &");
@@ -225,11 +223,9 @@ static json_object *create_json_request_message(eActionType request_type, const 
     CcspTraceInfo(("%s - %d [VAV] Enter \n", __FUNCTION__, __LINE__));
 
     json_object *jrequest = NULL;
-    json_object *jparam_arr = NULL;
-    json_object *jparam_obj = NULL;
     hal_param_t stParam;
     memset(&stParam, 0, sizeof(stParam));
-    json_bool val;
+
     switch (request_type)
     {
         case SET_REQUEST_MESSAGE:
@@ -439,9 +435,6 @@ void eventcb_PhysicalMediaStatus(const char *msg, const int len)
     ANSC_STATUS ret = ANSC_STATUS_FAILURE;
     char event_name[256] = {'\0'};
     char event_val[256] = {'\0'};
-    int pm_index = 0;
-    int hal_index = 0;
-
 
     ret = get_event_param(msg, len, event_name, event_val);
     if(ret == ANSC_STATUS_SUCCESS)
@@ -622,7 +615,7 @@ void eventcb_PloamRegistrationState (const char *msg, const int len)
                 DML_PLOAM* pGponPloam = &(pGponDmlData->gpon.Ploam);
 
                 //update data
-                ret = Map_hal_dml_veip(pGponPloam, event_name, event_val);
+                ret = Map_hal_dml_ploam(pGponPloam, event_name, event_val);
 
                 //release data
                 GponMgrDml_GetData_release(pGponDmlData);
@@ -1194,7 +1187,6 @@ ANSC_STATUS GponHal_send_config(void)
     if(pGponDmlData != NULL)
     {
         DML_PHY_MEDIA_LIST_T* pGponPhyMediaList = &(pGponDmlData->gpon.PhysicalMedia);
-        DML_GEM_LIST_T* pGponGemList = &(pGponDmlData->gpon.Gem);
         DML_VEIP_LIST_T* pGponVeipList = &(pGponDmlData->gpon.Veip);
 
         //PM Thresholds
@@ -1204,19 +1196,19 @@ ANSC_STATUS GponHal_send_config(void)
             {
                 DML_PHY_MEDIA* pPhyMedia = &(pGponPhyMediaList->pdata[idx]->dml);
 
-                sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%d.RxPower.SignalLevelLowerThreshold", pPhyMedia->uInstanceNumber);
+                sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.RxPower.SignalLevelLowerThreshold", pPhyMedia->uInstanceNumber);
                 retStatus = GponHal_SetParamInt(&(pPhyMedia->RxPower.SignalLevelLowerThreshold), req_param_str, pPhyMedia->RxPower.SignalLevelLowerThreshold);
                 if(retStatus != ANSC_STATUS_SUCCESS) break;
 
-                sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%d.RxPower.SignalLevelUpperThreshold", pPhyMedia->uInstanceNumber);
+                sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.RxPower.SignalLevelUpperThreshold", pPhyMedia->uInstanceNumber);
                 retStatus = GponHal_SetParamInt(&(pPhyMedia->RxPower.SignalLevelUpperThreshold), req_param_str, pPhyMedia->RxPower.SignalLevelUpperThreshold);
                 if(retStatus != ANSC_STATUS_SUCCESS) break;
 
-                sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%d.TxPower.SignalLevelLowerThreshold", pPhyMedia->uInstanceNumber);
+                sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.TxPower.SignalLevelLowerThreshold", pPhyMedia->uInstanceNumber);
                 retStatus = GponHal_SetParamInt(&(pPhyMedia->TxPower.SignalLevelLowerThreshold), req_param_str, pPhyMedia->TxPower.SignalLevelLowerThreshold);
                 if(retStatus != ANSC_STATUS_SUCCESS) break;
 
-                sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%d.TxPower.SignalLevelUpperThreshold", pPhyMedia->uInstanceNumber);
+                sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.TxPower.SignalLevelUpperThreshold", pPhyMedia->uInstanceNumber);
                 retStatus = GponHal_SetParamInt(&(pPhyMedia->TxPower.SignalLevelUpperThreshold), req_param_str, pPhyMedia->TxPower.SignalLevelUpperThreshold);
                 if(retStatus != ANSC_STATUS_SUCCESS) break;
 
@@ -1232,12 +1224,12 @@ ANSC_STATUS GponHal_send_config(void)
                 {
                     DML_VEIP* pVeip = &(pGponVeipList->pdata[idx]->dml);
 
-                    sprintf(req_param_str, "Device.X_RDK_ONT.Veip.%d.EthernetFlow.Ingress.Tagged", pVeip->uInstanceNumber);
+                    sprintf(req_param_str, "Device.X_RDK_ONT.Veip.%ld.EthernetFlow.Ingress.Tagged", pVeip->uInstanceNumber);
                     retStatus = GponHal_SetParamInt((INT*)&(pVeip->EthernetFlow.Ingress.Tagged), req_param_str, pVeip->EthernetFlow.Ingress.Tagged);
                     if(retStatus != ANSC_STATUS_SUCCESS) break;
 
-                    sprintf(req_param_str, "Device.X_RDK_ONT.Veip.%d.EthernetFlow.Ingress.Q-VLAN.Vid", pVeip->uInstanceNumber);
-                    retStatus = GponHal_SetParamInt(&(pVeip->EthernetFlow.Ingress.QVLAN.Vid), req_param_str, pVeip->EthernetFlow.Ingress.QVLAN.Vid);
+                    sprintf(req_param_str, "Device.X_RDK_ONT.Veip.%ld.EthernetFlow.Ingress.Q-VLAN.Vid", pVeip->uInstanceNumber);
+                    retStatus = GponHal_SetParamInt((INT *)&(pVeip->EthernetFlow.Ingress.QVLAN.Vid), req_param_str, pVeip->EthernetFlow.Ingress.QVLAN.Vid);
                     if(retStatus != ANSC_STATUS_SUCCESS) break;
                 }
             }
@@ -1253,19 +1245,19 @@ ANSC_STATUS GponHal_send_config(void)
                 {
                     DML_PHY_MEDIA* pPhyMedia = &(pGponPhyMediaList->pdata[idx]->dml);
 
-                    sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%d.Enable", pPhyMedia->uInstanceNumber);
+                    sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.Enable", pPhyMedia->uInstanceNumber);
 
                     retStatus = GponHal_SetParamBool(&(pPhyMedia->Enable), req_param_str, pPhyMedia->Enable);
                     if(retStatus != ANSC_STATUS_SUCCESS) break;
 
-                    sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%d.Alias", pPhyMedia->uInstanceNumber);
+                    sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.Alias", pPhyMedia->uInstanceNumber);
 
-                    retStatus = GponHal_SetParamString(&(pPhyMedia->Alias), req_param_str, pPhyMedia->Alias);
+                    retStatus = GponHal_SetParamString((pPhyMedia->Alias), req_param_str, pPhyMedia->Alias);
                     if(retStatus != ANSC_STATUS_SUCCESS) break;
 
-                    sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%d.LowerLayers", pPhyMedia->uInstanceNumber);
+                    sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.LowerLayers", pPhyMedia->uInstanceNumber);
 
-                    retStatus = GponHal_SetParamString(&(pPhyMedia->LowerLayers), req_param_str, pPhyMedia->LowerLayers);
+                    retStatus = GponHal_SetParamString((pPhyMedia->LowerLayers), req_param_str, pPhyMedia->LowerLayers);
                     if(retStatus != ANSC_STATUS_SUCCESS) break;
 
                 }

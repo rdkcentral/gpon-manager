@@ -24,6 +24,7 @@
 #include <string.h>
 #include "json_hal_common.h"
 #include "json_hal_client.h"
+#include "secure_wrapper.h"
 
 #include "gpon_apis.h"
 #include "gponmgr_dml_obj.h"
@@ -66,7 +67,7 @@
 #define GPON_HAL_GEM_ETH_INGRESS_CVLAN_DEI      "Device.X_RDK_ONT.Gem.%ld.EthernetFlow.Ingress.C-VLAN.Dei"
 
 
-#define GPON_HAL_VEIP_NODE                      "Device.X_RDK_ONT.Veip.%ld"
+#define GPON_HAL_VEIP_NODE                      "Device.X_RDK_ONT.Veip.%d"
 #define GPON_HAL_VEIP_ADMIN_STATE               "Device.X_RDK_ONT.Veip.%ld.AdministrativeState"
 #define GPON_HAL_VEIP_OPER_STATE                "Device.X_RDK_ONT.Veip.%ld.OperationalState"
 #define GPON_HAL_VEIP_ETH_EGRESS_TAGGED        "Device.X_RDK_ONT.Veip.%ld.EthernetFlow.Egress.Tagged"
