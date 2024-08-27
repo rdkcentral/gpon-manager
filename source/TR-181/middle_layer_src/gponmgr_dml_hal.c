@@ -220,8 +220,6 @@ ANSC_STATUS GponHal_get_init_data(void)
 
 static json_object *create_json_request_message(eActionType request_type, const CHAR *param_name, eParamType type, CHAR *param_val)
 {
-    CcspTraceInfo(("%s - %d [VAV] Enter \n", __FUNCTION__, __LINE__));
-
     json_object *jrequest = NULL;
     hal_param_t stParam;
     memset(&stParam, 0, sizeof(stParam));
@@ -391,6 +389,20 @@ ANSC_STATUS GponHal_SetParamBool(BOOL* SValue, char* HalName, BOOL bValue)
     return ANSC_STATUS_FAILURE;
 }
 
+ANSC_STATUS GponHal_SetParamUInt(UINT* SValue, char* HalName, UINT iValue)
+{
+    char strValue[JSON_MAX_VAL_ARR_SIZE]={0};
+
+    snprintf(strValue, JSON_MAX_VAL_ARR_SIZE, "%u", iValue);
+
+    if (GponHal_setParam(HalName, PARAM_UNSIGNED_INTEGER, strValue) == ANSC_STATUS_SUCCESS)
+    {
+        *SValue = iValue;
+        return ANSC_STATUS_SUCCESS;
+    }
+
+    return ANSC_STATUS_FAILURE;
+}
 
 ANSC_STATUS GponHal_SetParamInt(INT* SValue, char* HalName, INT iValue)
 {
@@ -407,28 +419,64 @@ ANSC_STATUS GponHal_SetParamInt(INT* SValue, char* HalName, INT iValue)
     return ANSC_STATUS_FAILURE;
 }
 
-#if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-ANSC_STATUS GponHal_SetParamString(char* SValue, char* HalName, char* pString)
+ANSC_STATUS GponHal_SetParamString(char* SValue, char* HalName, char *pString)
 {
     char strValue[JSON_MAX_VAL_ARR_SIZE]={0};
 
-    if (pString != NULL)
+    snprintf(strValue, JSON_MAX_VAL_ARR_SIZE, "%s", pString);
+
+    if (GponHal_setParam(HalName, PARAM_STRING, strValue) == ANSC_STATUS_SUCCESS)
     {
-       strncpy(strValue,JSON_STR_TRUE,strlen(JSON_STR_TRUE)+1);
+        AnscCopyString(SValue, pString);
+        return ANSC_STATUS_SUCCESS;
     }
     else
     {
-       strncpy(strValue,JSON_STR_FALSE,strlen(JSON_STR_FALSE)+1);
+        CcspTraceError(("%s %d - Invalid Input\n", __FUNCTION__,__LINE__)); 
+        return ANSC_STATUS_FAILURE;
     }
-    if (GponHal_setParam(HalName, PARAM_STRING, strValue) == ANSC_STATUS_SUCCESS)
+}
+
+ANSC_STATUS GponHal_SetIngressTagged(DML_VEIP_TAGGED_ENUM *SValue, char* HalName, DML_VEIP_TAGGED_ENUM pString)
+{
+    char strValue[JSON_MAX_VAL_ARR_SIZE] = {0};
+    char strValue2[JSON_MAX_VAL_ARR_SIZE] = {0};
+
+    if( pString == veip_Single )
     {
-       AnscCopyString(SValue, pString);
-       return ANSC_STATUS_SUCCESS;
+        strcpy(strValue, IEEE_802_1Q_ETHERTYPE_STR_SINGLE);
+    }
+    else if( pString == veip_Double )
+    {
+        strcpy(strValue, IEEE_802_1Q_ETHERTYPE_STR_DOUBLE);
+    }
+    else if ( pString == veip_Untagged )
+    {
+        strcpy(strValue, IEEE_802_1Q_ETHERTYPE_STR_UNTAGGED);
     }
 
-    return ANSC_STATUS_FAILURE;
+    if (GponHal_SetParamString(strValue2, HalName, strValue) == ANSC_STATUS_SUCCESS)
+    {
+        if(strcmp(strValue2, IEEE_802_1Q_ETHERTYPE_STR_SINGLE) == 0)
+        {
+            *SValue  = veip_Single;
+        }
+        else if(strcmp(strValue2, IEEE_802_1Q_ETHERTYPE_STR_DOUBLE) == 0)
+        {
+            *SValue = veip_Double;
+        }
+        else if (strcmp (strValue2, IEEE_802_1Q_ETHERTYPE_STR_UNTAGGED) == 0)
+        {
+            *SValue = veip_Untagged;
+        }
+        return ANSC_STATUS_SUCCESS;
+    }
+    else
+    {
+        CcspTraceError(("%s %d - Invalid Input\n", __FUNCTION__,__LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
 }
-#endif
 
 void eventcb_PhysicalMediaStatus(const char *msg, const int len)
 {
@@ -1225,45 +1273,15 @@ ANSC_STATUS GponHal_send_config(void)
                     DML_VEIP* pVeip = &(pGponVeipList->pdata[idx]->dml);
 
                     sprintf(req_param_str, "Device.X_RDK_ONT.Veip.%ld.EthernetFlow.Ingress.Tagged", pVeip->uInstanceNumber);
-                    retStatus = GponHal_SetParamInt((INT*)&(pVeip->EthernetFlow.Ingress.Tagged), req_param_str, pVeip->EthernetFlow.Ingress.Tagged);
+                    retStatus = GponHal_SetIngressTagged(&(pVeip->EthernetFlow.Ingress.Tagged),req_param_str,pVeip->EthernetFlow.Ingress.Tagged);
                     if(retStatus != ANSC_STATUS_SUCCESS) break;
 
                     sprintf(req_param_str, "Device.X_RDK_ONT.Veip.%ld.EthernetFlow.Ingress.Q-VLAN.Vid", pVeip->uInstanceNumber);
-                    retStatus = GponHal_SetParamInt((INT *)&(pVeip->EthernetFlow.Ingress.QVLAN.Vid), req_param_str, pVeip->EthernetFlow.Ingress.QVLAN.Vid);
+                    retStatus = GponHal_SetParamUInt(&(pVeip->EthernetFlow.Ingress.QVLAN.Vid), req_param_str, pVeip->EthernetFlow.Ingress.QVLAN.Vid);
                     if(retStatus != ANSC_STATUS_SUCCESS) break;
                 }
             }
         }
-
-#if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-        //PM.Enable, PM.Alias, PM.LowerLayers
-        if(retStatus == ANSC_STATUS_SUCCESS)
-        {
-            for (int idx = 0; idx < pGponPhyMediaList->ulQuantity; ++idx)
-            {
-                if(pGponPhyMediaList->pdata[idx] != NULL)
-                {
-                    DML_PHY_MEDIA* pPhyMedia = &(pGponPhyMediaList->pdata[idx]->dml);
-
-                    sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.Enable", pPhyMedia->uInstanceNumber);
-
-                    retStatus = GponHal_SetParamBool(&(pPhyMedia->Enable), req_param_str, pPhyMedia->Enable);
-                    if(retStatus != ANSC_STATUS_SUCCESS) break;
-
-                    sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.Alias", pPhyMedia->uInstanceNumber);
-
-                    retStatus = GponHal_SetParamString((pPhyMedia->Alias), req_param_str, pPhyMedia->Alias);
-                    if(retStatus != ANSC_STATUS_SUCCESS) break;
-
-                    sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.LowerLayers", pPhyMedia->uInstanceNumber);
-
-                    retStatus = GponHal_SetParamString((pPhyMedia->LowerLayers), req_param_str, pPhyMedia->LowerLayers);
-                    if(retStatus != ANSC_STATUS_SUCCESS) break;
-
-                }
-            }
-        }
-#endif
     }
 
     GponMgrDml_GetData_release(pGponDmlData);

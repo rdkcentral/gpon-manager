@@ -176,6 +176,7 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     if( strstr(ParamName, "ModuleVendor"))
     {
         strncpy(pPhyMedia->ModuleVendor,pValue,strlen(pValue)+1);
+        retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "ModuleName"))
     {
@@ -200,7 +201,7 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     else if( strstr(ParamName, "PonMode"))
     {
         //GPON(0),XGPON(1),NGPON2(2),XGPON2(3)
-        if(strstr(pValue,"XGPON"))
+        if(strstr(pValue,"GPON"))
         {
             pPhyMedia->PonMode = GPON;
             retStatus = ANSC_STATUS_SUCCESS;
@@ -1032,6 +1033,12 @@ ANSC_STATUS Map_hal_dml_veip(DML_VEIP_LIST_T* gponVeipList, char* ParamName, cha
         strncpy(pVeip->InterfaceName,pValue,strlen(pValue)+1);
         retStatus = ANSC_STATUS_SUCCESS;
     }
+    else if (strstr(ParamName, "EthernetFlow"))
+    {
+	//handled in parseStrInput_InterDomainName
+        retStatus = ANSC_STATUS_SUCCESS;
+    }
+
     
     if(retStatus == ANSC_STATUS_SUCCESS)
     {
