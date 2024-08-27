@@ -41,11 +41,7 @@ ANSC_STATUS gpon_hal_get_pm_index(char* ParamName, int* index)
 
 ANSC_STATUS gpon_hal_get_gem_index(char* ParamName, int* index)
 {    
-#if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-    sscanf(ParamName,"Device.X_RDK_ONT.GemStats.%d.", index);
-#else
     sscanf(ParamName,"Device.X_RDK_ONT.Gem.%d.", index);
-#endif
     return ANSC_STATUS_SUCCESS;    
 }
 

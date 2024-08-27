@@ -30,10 +30,6 @@
 
 #define MAX_STR_LEN 256
 
-#if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-#define TABLE_INDEX_MAX 1
-#endif
-
 //Tagged specific information
 #define IEEE_802_1Q_ETHERTYPE_STR_SINGLE   "Single"
 #define IEEE_802_1Q_ETHERTYPE_STR_DOUBLE   "Double"
