@@ -55,15 +55,9 @@
 #endif
 #define NULL_TYPE 0
 
-#if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-#define GPON_QUERY_PM    "Device.X_RDK_ONT.PhysicalMedia.1."
-#define GPON_QUERY_GEM   "Device.X_RDK_ONT.GemStats.1."
-#define GPON_QUERY_VEIP  "Device.X_RDK_ONT.Veip.1."
-#else
 #define GPON_QUERY_PM    "Device.X_RDK_ONT.PhysicalMedia."
 #define GPON_QUERY_GEM   "Device.X_RDK_ONT.Gem."
 #define GPON_QUERY_VEIP  "Device.X_RDK_ONT.Veip."
-#endif
 #define GPON_QUERY_GTC   "Device.X_RDK_ONT.Gtc."
 #define GPON_QUERY_PLOAM "Device.X_RDK_ONT.Ploam."
 #define GPON_QUERY_OMCI  "Device.X_RDK_ONT.Omci."
@@ -187,9 +181,6 @@ ANSC_STATUS GponHal_get_init_data(void)
 {
     ANSC_STATUS retStatus = ANSC_STATUS_FAILURE;
     bool data_initialised = FALSE;
-#if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-    int retry_count = 1;
-#endif
 
     while(data_initialised != TRUE)
     {
@@ -198,20 +189,6 @@ ANSC_STATUS GponHal_get_init_data(void)
         {
             data_initialised = GponHal_check_data_initiliased();
         }
-#if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-        //TODO: Sky has partially implemented the data models. So due to this json hal request is failing for many parameters.
-        //  GponHal_check_data_initiliased is failing due to that which is causing infinite wait.
-        //  So for now we added limit on number of retries and exiting after max retries limit reaches. This need to be removed
-        //  once we are able to read all data model using json hal.
-        if(retry_count >= 0)
-        {
-            retry_count--;
-        }    
-        else
-        {
-             break;
-        }
-#endif
     }
 
     return retStatus;
@@ -563,9 +540,6 @@ void eventcb_VeipOperationalState(const char *msg, const int len)
                 ret = Map_hal_dml_veip(pGponVeipList, event_name, event_val);
 
 #if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-                /*TODO : Need revisit based on outcome of CS00012203760 
-		 Change added to check the veip adminstate whenever we receive the operstate
-                 callback and if its "Unlock" then start the state machine.*/
                 gpon_hal_get_veip_index(event_name, &hal_index);
                 if(hal_index > 0)
                 {

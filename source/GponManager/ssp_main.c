@@ -275,7 +275,7 @@ int main(int argc, char* argv[])
     fclose(fd);
 
 #ifdef INCLUDE_BREAKPAD
-    breakpad_ExceptionHandler();
+    // breakpad_ExceptionHandler();
     signal(SIGALRM, sig_handler);
 #else
     signal(SIGTERM, sig_handler);
