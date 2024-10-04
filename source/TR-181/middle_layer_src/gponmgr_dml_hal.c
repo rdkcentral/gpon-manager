@@ -130,7 +130,7 @@ ANSC_STATUS GponHal_Init()
         }
         else
         {
-            CcspTraceInfo(("Hal-client connected to the hal server \n"));
+            CcspTraceInfo(("Hal-client connected to the hal server\n"));
             is_client_connected = TRUE;
             break;
         }
@@ -138,7 +138,7 @@ ANSC_STATUS GponHal_Init()
 
     if (is_client_connected != TRUE)
     {
-        CcspTraceInfo(("Failed to connect to the hal server. \n"));
+        CcspTraceError(("Failed to connect to the hal server\n"));
         return ANSC_STATUS_FAILURE;
     }
     return ANSC_STATUS_SUCCESS;
@@ -201,6 +201,11 @@ static json_object *create_json_request_message(eActionType request_type, const 
     hal_param_t stParam;
     memset(&stParam, 0, sizeof(stParam));
 
+    if((NULL == param_name))
+    {
+        CcspTraceWarning(("%s %d - Invalid Parameter name\n", __FUNCTION__, __LINE__));
+    }
+
     switch (request_type)
     {
         case SET_REQUEST_MESSAGE:
@@ -241,6 +246,13 @@ ANSC_STATUS GponHal_setParam(char *pName, eParamType pType, char *pValue)
     json_object *jrequest;
     int rc = ANSC_STATUS_FAILURE;
     json_bool status = FALSE;
+
+    if((NULL == pName) || (NULL == pValue))
+    {
+        CcspTraceError(("%s %d - Failed to set parameters, Null value input\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
+
     jrequest = create_json_request_message(SET_REQUEST_MESSAGE, pName, pType, pValue);
     CHECK(jrequest != NULL);
 
@@ -295,7 +307,15 @@ ANSC_STATUS get_event_param(const char* msg, const int len, char* event_name, ch
     json_object* msg_param = NULL;
     json_object* msg_param_val = NULL;
 
-    if(msg == NULL) {
+    if(msg == NULL)
+    {
+        CcspTraceError(("%s %d - Invalid Message\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
+
+    if ((NULL == event_name) || (NULL == event_val))
+    {
+        CcspTraceError(("%s %d - Invalid Event Data\n", __FUNCTION__, __LINE__));
         return ANSC_STATUS_FAILURE;
     }
 
@@ -349,6 +369,12 @@ ANSC_STATUS get_event_param(const char* msg, const int len, char* event_name, ch
 ANSC_STATUS GponHal_SetParamBool(BOOL* SValue, char* HalName, BOOL bValue)
 {
     char strValue[8] = {0};
+    if ((NULL == SValue) || (NULL == HalName))
+    {
+        CcspTraceError(("%s %d - Failed to set parameters, Null value input\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
+
     if (bValue == TRUE)
     {
         strncpy(strValue, JSON_STR_TRUE, strlen(JSON_STR_TRUE)+1);
@@ -370,6 +396,11 @@ ANSC_STATUS GponHal_SetParamUInt(UINT* SValue, char* HalName, UINT iValue)
 {
     char strValue[JSON_MAX_VAL_ARR_SIZE]={0};
 
+    if (( NULL == SValue) || (NULL == HalName))
+    {
+        CcspTraceError(("%s %d - Failed to set parameters, Null value input\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
     snprintf(strValue, JSON_MAX_VAL_ARR_SIZE, "%u", iValue);
 
     if (GponHal_setParam(HalName, PARAM_UNSIGNED_INTEGER, strValue) == ANSC_STATUS_SUCCESS)
@@ -384,6 +415,12 @@ ANSC_STATUS GponHal_SetParamUInt(UINT* SValue, char* HalName, UINT iValue)
 ANSC_STATUS GponHal_SetParamInt(INT* SValue, char* HalName, INT iValue)
 {
     char strValue[JSON_MAX_VAL_ARR_SIZE]={0};
+
+    if (( NULL == SValue) || (NULL == HalName))
+    {
+        CcspTraceError(("%s %d - Failed to set parameters, Null Value Input\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
 
     snprintf(strValue, JSON_MAX_VAL_ARR_SIZE, "%d", iValue);
 
@@ -400,6 +437,12 @@ ANSC_STATUS GponHal_SetParamString(char* SValue, char* HalName, char *pString)
 {
     char strValue[JSON_MAX_VAL_ARR_SIZE]={0};
 
+    if (( NULL == SValue) || (NULL == HalName))
+    {
+        CcspTraceError(("%s %d - Failed to set parameters, Null Value Input\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
+
     snprintf(strValue, JSON_MAX_VAL_ARR_SIZE, "%s", pString);
 
     if (GponHal_setParam(HalName, PARAM_STRING, strValue) == ANSC_STATUS_SUCCESS)
@@ -409,7 +452,7 @@ ANSC_STATUS GponHal_SetParamString(char* SValue, char* HalName, char *pString)
     }
     else
     {
-        CcspTraceError(("%s %d - Invalid Input\n", __FUNCTION__,__LINE__)); 
+        CcspTraceError(("%s %d - Failed to set values\n", __FUNCTION__,__LINE__)); 
         return ANSC_STATUS_FAILURE;
     }
 }
@@ -418,6 +461,12 @@ ANSC_STATUS GponHal_SetIngressTagged(DML_VEIP_TAGGED_ENUM *SValue, char* HalName
 {
     char strValue[JSON_MAX_VAL_ARR_SIZE] = {0};
     char strValue2[JSON_MAX_VAL_ARR_SIZE] = {0};
+
+    if((NULL == SValue) || (NULL == HalName))
+    {
+        CcspTraceError(("%s %d - Failed to set parameters, Null Value Input\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
 
     if( pString == veip_Single )
     {
@@ -450,7 +499,7 @@ ANSC_STATUS GponHal_SetIngressTagged(DML_VEIP_TAGGED_ENUM *SValue, char* HalName
     }
     else
     {
-        CcspTraceError(("%s %d - Invalid Input\n", __FUNCTION__,__LINE__));
+        CcspTraceError(("%s %d - Failed to Set Values for IngressTagged\n", __FUNCTION__, __LINE__));
         return ANSC_STATUS_FAILURE;
     }
 }
@@ -482,6 +531,11 @@ void eventcb_PhysicalMediaStatus(const char *msg, const int len)
         }
     }
 
+    else
+    {
+        CcspTraceError(("%s %d - Failed to extract event parameters from message for Physical Media status\n", __FUNCTION__, __LINE__));
+    }
+
 }
 
 void eventcb_PhysicalMediaAlarmsAll(const char *msg, const int len)
@@ -509,6 +563,10 @@ void eventcb_PhysicalMediaAlarmsAll(const char *msg, const int len)
                 GponMgrDml_GetData_release(pGponDmlData);
             }
         }
+    }
+    else
+    {
+        CcspTraceError(("%s %d - Failed to extract event parameters from message for Physical Media Alarms Event\n", __FUNCTION__, __LINE__));
     }
 }
 
@@ -560,6 +618,10 @@ void eventcb_VeipAdministrativeState(const char *msg, const int len)
             }
 
         }
+    }
+    else
+    {
+        CcspTraceError(("%s %d - Failed to extract event parameters from message for Veip Administrative state\n", __FUNCTION__, __LINE__));
     }
 }
 
@@ -617,6 +679,10 @@ void eventcb_VeipOperationalState(const char *msg, const int len)
             }
         }
     }
+    else
+    {
+       CcspTraceError(("%s %d - Failed to extract event parameters from message for Veip operational state\n", __FUNCTION__, __LINE__));
+    }
 }
 void eventcb_PloamRegistrationState (const char *msg, const int len)
 {
@@ -643,6 +709,10 @@ void eventcb_PloamRegistrationState (const char *msg, const int len)
                 GponMgrDml_GetData_release(pGponDmlData);
             }
         }
+    }
+    else
+    {
+       CcspTraceError(("%s %d - Failed to extract event parameters from message for Ploam Registration state\n", __FUNCTION__, __LINE__));
     }
 }
 
@@ -912,6 +982,12 @@ ANSC_STATUS GponHal_get_pm(DML_PHY_MEDIA_LIST_T* pPhysicalMediaList)
     hal_param_t resp_param;
     json_object *jreply_msg = NULL;
 
+    if (pPhysicalMediaList == NULL)
+    {
+        CcspTraceError(("%s %d - Failed to get Physical Media list\n", __FUNCTION__, __LINE__));
+        rc = ANSC_STATUS_FAILURE;
+        return rc;
+    }
 
     json_object *jrequest = create_json_request_message(GET_REQUEST_MESSAGE, GPON_QUERY_PM, NULL_TYPE , NULL);
 
@@ -1066,6 +1142,12 @@ ANSC_STATUS GponHal_get_veip(DML_VEIP_LIST_T* pGponVeipList)
     hal_param_t resp_param;
     json_object *jreply_msg = NULL;
 
+    if (pGponVeipList == NULL)
+    {
+        CcspTraceError(("%s %d - Failed to get VEIP data\n", __FUNCTION__, __LINE__));
+        rc = ANSC_STATUS_FAILURE;
+        return rc;
+    }
 
     json_object *jrequest = create_json_request_message(GET_REQUEST_MESSAGE, GPON_QUERY_VEIP, NULL_TYPE , NULL);
 
@@ -1150,42 +1232,49 @@ ANSC_STATUS GponHal_get_data(void)
         ret = GponHal_get_pm(&(pGponDmlData->gpon.PhysicalMedia));
         if(ret != ANSC_STATUS_SUCCESS)
         {
+            CcspTraceError(("%s %d - Failed to get Physical Media Data\n", __FUNCTION__, __LINE__));
             retStatus = ANSC_STATUS_FAILURE;
         }
 
         ret = GponHal_get_gtc(&(pGponDmlData->gpon.Gtc));
         if(ret != ANSC_STATUS_SUCCESS)
         {
+            CcspTraceError(("%s %d - Failed to get GTC  Data\n", __FUNCTION__, __LINE__));
             retStatus = ANSC_STATUS_FAILURE;
         }
 
         ret = GponHal_get_ploam(&(pGponDmlData->gpon.Ploam));
         if(ret != ANSC_STATUS_SUCCESS)
         {
+            CcspTraceError(("%s %d - Failed to get Ploam Data\n", __FUNCTION__, __LINE__));
             retStatus = ANSC_STATUS_FAILURE;
         }
 
         ret = GponHal_get_omci(&(pGponDmlData->gpon.Omci));
         if(ret != ANSC_STATUS_SUCCESS)
         {
+            CcspTraceError(("%s %d - Failed to get Omci  Data\n", __FUNCTION__, __LINE__));
             retStatus = ANSC_STATUS_FAILURE;
         }
 
         ret = GponHal_get_gem(&(pGponDmlData->gpon.Gem));
         if(ret != ANSC_STATUS_SUCCESS)
         {
+            CcspTraceError(("%s %d - Failed to get GEM Data\n", __FUNCTION__, __LINE__));
             retStatus = ANSC_STATUS_FAILURE;
         }
 
         ret = GponHal_get_veip(&(pGponDmlData->gpon.Veip));
         if(ret != ANSC_STATUS_SUCCESS)
         {
+            CcspTraceError(("%s %d - Failed to get Veip Data\n", __FUNCTION__, __LINE__));
             retStatus = ANSC_STATUS_FAILURE;
         }
 
         ret = GponHal_get_tr69(&(pGponDmlData->gpon.Tr69));
         if(ret != ANSC_STATUS_SUCCESS)
         {
+            CcspTraceError(("%s %d - Failed to get TR-69 Data\n", __FUNCTION__, __LINE__));
             retStatus = ANSC_STATUS_FAILURE;
         }
 
@@ -1220,20 +1309,35 @@ ANSC_STATUS GponHal_send_config(void)
 
                 sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.RxPower.SignalLevelLowerThreshold", pPhyMedia->uInstanceNumber);
                 retStatus = GponHal_SetParamInt(&(pPhyMedia->RxPower.SignalLevelLowerThreshold), req_param_str, pPhyMedia->RxPower.SignalLevelLowerThreshold);
-                if(retStatus != ANSC_STATUS_SUCCESS) break;
+                if(retStatus != ANSC_STATUS_SUCCESS)
+                {
+                    CcspTraceError(("%s %d - Failed to set RxPower.SignalLevelLowerThreshold\n", __FUNCTION__, __LINE__));
+                    break;
+                }
 
                 sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.RxPower.SignalLevelUpperThreshold", pPhyMedia->uInstanceNumber);
                 retStatus = GponHal_SetParamInt(&(pPhyMedia->RxPower.SignalLevelUpperThreshold), req_param_str, pPhyMedia->RxPower.SignalLevelUpperThreshold);
-                if(retStatus != ANSC_STATUS_SUCCESS) break;
+                if(retStatus != ANSC_STATUS_SUCCESS)
+                {
+                    CcspTraceError(("%s %d - Failed to set RxPower.SignalLevelUpperThreshold\n", __FUNCTION__, __LINE__));
+                    break;
+                }
 
                 sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.TxPower.SignalLevelLowerThreshold", pPhyMedia->uInstanceNumber);
                 retStatus = GponHal_SetParamInt(&(pPhyMedia->TxPower.SignalLevelLowerThreshold), req_param_str, pPhyMedia->TxPower.SignalLevelLowerThreshold);
-                if(retStatus != ANSC_STATUS_SUCCESS) break;
+                if(retStatus != ANSC_STATUS_SUCCESS)
+                {
+                    CcspTraceError(("%s %d - Failed to set TxPower.SignalLevelLowerThreshold\n", __FUNCTION__, __LINE__));
+                    break;
+                }
 
                 sprintf(req_param_str, "Device.X_RDK_ONT.PhysicalMedia.%ld.TxPower.SignalLevelUpperThreshold", pPhyMedia->uInstanceNumber);
                 retStatus = GponHal_SetParamInt(&(pPhyMedia->TxPower.SignalLevelUpperThreshold), req_param_str, pPhyMedia->TxPower.SignalLevelUpperThreshold);
-                if(retStatus != ANSC_STATUS_SUCCESS) break;
-
+                if(retStatus != ANSC_STATUS_SUCCESS)
+                {
+                    CcspTraceError(("%s %d - Failed to set TxPower.SignalLevelUpperThreshold\n", __FUNCTION__, __LINE__));
+                    break;
+                }
             }
         }
 
@@ -1248,11 +1352,19 @@ ANSC_STATUS GponHal_send_config(void)
 
                     sprintf(req_param_str, "Device.X_RDK_ONT.Veip.%ld.EthernetFlow.Ingress.Tagged", pVeip->uInstanceNumber);
                     retStatus = GponHal_SetIngressTagged(&(pVeip->EthernetFlow.Ingress.Tagged),req_param_str,pVeip->EthernetFlow.Ingress.Tagged);
-                    if(retStatus != ANSC_STATUS_SUCCESS) break;
+                    if(retStatus != ANSC_STATUS_SUCCESS)
+                    {
+                        CcspTraceError(("%s %d - Failed to set EthernetFlow.Ingress.Tagged\n", __FUNCTION__, __LINE__));
+                        break;
+                    }                    
 
                     sprintf(req_param_str, "Device.X_RDK_ONT.Veip.%ld.EthernetFlow.Ingress.Q-VLAN.Vid", pVeip->uInstanceNumber);
                     retStatus = GponHal_SetParamUInt(&(pVeip->EthernetFlow.Ingress.QVLAN.Vid), req_param_str, pVeip->EthernetFlow.Ingress.QVLAN.Vid);
-                    if(retStatus != ANSC_STATUS_SUCCESS) break;
+                    if(retStatus != ANSC_STATUS_SUCCESS)
+                    {
+                        CcspTraceError(("%s %d - Failed to set EthernetFlow.Ingress.Tagged\n", __FUNCTION__, __LINE__));
+                        break;
+                    }                    
                 }
             }
         }

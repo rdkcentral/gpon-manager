@@ -30,6 +30,12 @@ static ANSC_STATUS Gponmgr_eth_getParams(char *pComponent, char *pBus, char *pPa
     int ret = 0,
         nval;
 
+    if((NULL == pComponent) || (NULL == pBus) || (NULL == pParamName))
+    {
+        CcspTraceError(("%s %d - Failed to get Eth Parameters\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
+
     //Assign address for get parameter name
     ParamName[0] = pParamName;
 
@@ -75,6 +81,12 @@ static ANSC_STATUS isGponExistsInEthAgent(char *pInterface, int  *iEthVeipIndex)
     INT iLoopCount;
     INT iTotalNoofEntries;
     ANSC_STATUS retStatus = ANSC_STATUS_FAILURE;
+
+    if( NULL == pInterface )
+    {
+        CcspTraceError(("%s %d - Invalid Interface\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
 
     if(ANSC_STATUS_FAILURE == Gponmgr_eth_getParams(ETH_MGR_COMPONENT_NAME, ETH_MGR_DBUS_PATH, ETH_MGR_NO_OF_IFACE,acTmpReturnValue))
     {
@@ -167,6 +179,12 @@ ANSC_STATUS CosaDmlGetLowerLayersInstanceInWanManager(char *pLowerLayers, INT *p
     INT iLoopCount = 0;
     INT iTotalNoofEntries = 0;
 
+    if ( NULL == pLowerLayers )
+    {
+        CcspTraceError(("%s %d - Invalid Lower layer data\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
+
     if (ANSC_STATUS_FAILURE == Gponmgr_eth_getParams(WAN_MGR_COMPONENT_NAME, WAN_MGR_DBUS_PATH, WAN_NOE_PARAM_NAME, acTmpReturnValue))
     {
         CcspTraceError(("%s %d Failed to get param value\n", __FUNCTION__, __LINE__));
@@ -216,6 +234,11 @@ ANSC_STATUS CosaDmlGponSetPhyStatusForWanManager(int iVeipIndex ,char *LowerLaye
     PDML_VEIP pGponVeip = NULL;
     INT iWANInstance = -1;
 
+    if (LowerLayers == NULL)
+    {
+        CcspTraceError(("%s Invalid LowerLayers Value\n", __FUNCTION__));
+        return ANSC_STATUS_FAILURE;
+    }
     if (PhyStatus == NULL)
     {
         CcspTraceError(("%s Invalid Physical Status\n", __FUNCTION__));
@@ -300,6 +323,11 @@ ANSC_STATUS Gponmgr_eth_addInterface(int iVeipIndex, char *LowerLayers, int *iVe
 
     *iVeipInstance = -1;
 
+    if ( NULL == LowerLayers )
+    {
+        CcspTraceError(("%s %d - Failed to add Eth Interface\n", __FUNCTION__, __LINE__));
+        return ANSC_STATUS_FAILURE;
+    }
 
     GPON_DML_DATA* pGponDmlData = GponMgrDml_GetData_locked();
     if(pGponDmlData != NULL)

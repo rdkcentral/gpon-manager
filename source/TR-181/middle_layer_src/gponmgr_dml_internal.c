@@ -30,7 +30,7 @@ ANSC_STATUS GponMgr_InternalControlInit(void)
      */
     if(GponMgr_Controller_Init() != ANSC_STATUS_SUCCESS)
     {
-        CcspTraceInfo(("%s %d Error: GponMgr_Controller_Init failed \n", __FUNCTION__, __LINE__ ));
+        CcspTraceError(("%s %d Error: GponMgr_Controller_Init failed\n", __FUNCTION__, __LINE__ ));
     }
 
 
