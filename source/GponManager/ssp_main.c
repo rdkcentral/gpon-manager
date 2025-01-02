@@ -260,6 +260,7 @@ int main(int argc, char* argv[])
 
     //rdklogger init
     rdk_logger_init(DEBUG_INI_NAME);
+    CcspTraceInfo(("Version : %s \n",GIT_VERSION ));
 
     if ( bRunAsDaemon )
         daemonize();
