@@ -253,12 +253,12 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     }
     else if( strstr(ParamName, "NominalBitRateDownstream"))
     {
-        pPhyMedia->NominalBitRateDownstream = strtoul(pValue,&err,10);
+        pPhyMedia->NominalBitRateDownstream = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "NominalBitRateUpstream"))
     {
-        pPhyMedia->NominalBitRateUpstream = strtoul(pValue,&err,10);
+        pPhyMedia->NominalBitRateUpstream = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
 #if defined(WAN_MANAGER_UNIFICATION_ENABLED)
@@ -328,7 +328,7 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     }
     else if( strstr(ParamName, "LastChange"))
     {
-        pPhyMedia->LastChange = strtoul(pValue,&err,10);
+        pPhyMedia->LastChange = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "LowerLayers"))
@@ -348,17 +348,17 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     {
         if( strstr(ParamName, "SignalLevelLowerThreshold"))
         {
-            pPhyMedia->RxPower.SignalLevelLowerThreshold  = strtol(pValue,&err,10);
+            pPhyMedia->RxPower.SignalLevelLowerThreshold  = strtol(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
         else if( strstr(ParamName, "SignalLevelUpperThreshold"))
         {
-            pPhyMedia->RxPower.SignalLevelUpperThreshold  = strtol(pValue,&err,10);
+            pPhyMedia->RxPower.SignalLevelUpperThreshold  = strtol(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
         else if( strstr(ParamName, "SignalLevel"))
         {
-            pPhyMedia->RxPower.SignalLevel = strtol(pValue,&err,10);
+            pPhyMedia->RxPower.SignalLevel = strtol(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
 
@@ -369,17 +369,17 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     {
         if( strstr(ParamName, "SignalLevelLowerThreshold"))
         {
-            pPhyMedia->TxPower.SignalLevelLowerThreshold  = strtol(pValue,&err,10);
+            pPhyMedia->TxPower.SignalLevelLowerThreshold  = strtol(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
         else if( strstr(ParamName, "SignalLevelUpperThreshold"))
         {
-            pPhyMedia->TxPower.SignalLevelUpperThreshold  = strtol(pValue,&err,10);
+            pPhyMedia->TxPower.SignalLevelUpperThreshold  = strtol(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
         else if( strstr(ParamName, "SignalLevel"))
         {
-            pPhyMedia->TxPower.SignalLevel  = strtol(pValue,&err,10);
+            pPhyMedia->TxPower.SignalLevel  = strtol(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
     }
@@ -387,7 +387,7 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     /* Voltage */
     else if( strstr(ParamName, "VoltageLevel"))
     {
-        pPhyMedia->Voltage.VoltageLevel  = strtol(pValue,&err,10);
+        pPhyMedia->Voltage.VoltageLevel  = strtol(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
 
@@ -396,7 +396,7 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     {
         if( strstr(ParamName, "CurrentBias"))
         {
-            pPhyMedia->Bias.CurrentBias  = strtoul(pValue,&err,10);
+            pPhyMedia->Bias.CurrentBias  = strtoull(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
     }
@@ -406,7 +406,7 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     {
         if( strstr(ParamName, "CurrentTemp"))
         {
-            pPhyMedia->Temperature.CurrentTemp = strtol(pValue,&err,10);
+            pPhyMedia->Temperature.CurrentTemp = strtol(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
     }
@@ -416,12 +416,12 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     {
         if( strstr(ParamName, "SignalFail"))
         {
-            pPhyMedia->PerformThreshold.SignalFail  = strtoul(pValue,&err,10);
+            pPhyMedia->PerformThreshold.SignalFail  = strtoull(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
         else if( strstr(ParamName, "SignalDegrade"))
         {
-            pPhyMedia->PerformThreshold.SignalDegrade = strtoul(pValue,&err,10);
+            pPhyMedia->PerformThreshold.SignalDegrade = strtoull(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
     }
@@ -450,42 +450,42 @@ ANSC_STATUS Map_hal_dml_gtc(DML_GTC* gponGtc,char* ParamName, char* pValue)
     /* check the parameter name and return the corresponding value */
     if( strstr(ParamName, "CorrectedFecBytes"))
     {
-        gponGtc->CorrectedFecBytes = strtoul(pValue,&err,10);
+        gponGtc->CorrectedFecBytes = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "UnCorrectedFecCodeWords"))
     {
-        gponGtc->UnCorrectedFecCodeWords = strtoul(pValue,&err,10);
+        gponGtc->UnCorrectedFecCodeWords = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "CorrectedFecCodeWords"))
     {
-        gponGtc->CorrectedFecCodeWords = strtoul(pValue,&err,10);
+        gponGtc->CorrectedFecCodeWords = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "TotalFecCodeWords"))
     {
-        gponGtc->TotalFecCodeWords = strtoul(pValue,&err,10);
+        gponGtc->TotalFecCodeWords = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "HecErrorCount"))
     {
-        gponGtc->HecErrorCount = strtoul(pValue,&err,10);
+        gponGtc->HecErrorCount = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "PSBdHecErrors"))
     {
-        gponGtc->PSBdHecErrors = strtoul(pValue,&err,10);
+        gponGtc->PSBdHecErrors = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "FrameHecErrors"))
     {
-        gponGtc->FrameHecErrors = strtoul(pValue,&err,10);
+        gponGtc->FrameHecErrors = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "FramesLost"))
     {
-        gponGtc->FramesLost = strtoul(pValue,&err,10);
+        gponGtc->FramesLost = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     
@@ -504,7 +504,7 @@ ANSC_STATUS Map_hal_dml_ploam(DML_PLOAM* gponPloam, char* ParamName, char* pValu
     
     if( strstr(ParamName, "OnuId"))
     {
-        gponPloam->OnuId = strtoul(pValue,&err,10);
+        gponPloam->OnuId = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "VendorId"))
@@ -519,22 +519,22 @@ ANSC_STATUS Map_hal_dml_ploam(DML_PLOAM* gponPloam, char* ParamName, char* pValu
     }
     else if( strstr(ParamName, "ActivationCounter"))
     {
-        gponPloam->ActivationCounter = strtoul(pValue,&err,10);
+        gponPloam->ActivationCounter = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "TxMessageCount"))
     {
-        gponPloam->TxMessageCount = strtoul(pValue,&err,10);
+        gponPloam->TxMessageCount = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "RxMessageCount"))
     {
-        gponPloam->RxMessageCount = strtoul(pValue,&err,10);
+        gponPloam->RxMessageCount = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "MicErrors"))
     {
-        gponPloam->MicErrors = strtoul(pValue,&err,10);
+        gponPloam->MicErrors = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }    
     else if( strstr(ParamName, "RegistrationState"))
@@ -590,12 +590,12 @@ ANSC_STATUS Map_hal_dml_ploam(DML_PLOAM* gponPloam, char* ParamName, char* pValu
     {
         if( strstr(ParamName, "TO1"))
         {
-            gponPloam->RegistrationTimers.TO1 = strtoul(pValue,&err,10);
+            gponPloam->RegistrationTimers.TO1 = strtoull(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
         if( strstr(ParamName, "TO2"))
         {
-            gponPloam->RegistrationTimers.TO2 = strtoul(pValue,&err,10);
+            gponPloam->RegistrationTimers.TO2 = strtoull(pValue, &err, 10);
             retStatus = ANSC_STATUS_SUCCESS;
         }
     }
@@ -615,17 +615,17 @@ ANSC_STATUS Map_hal_dml_omci(DML_OMCI* gponOmci, char* ParamName, char* pValue)
     
     if( strstr(ParamName, "RxBaseLineMessageCountValid"))
     {
-        gponOmci->RxBaseLineMessageCountValid = strtoul(pValue,&err,10);
+        gponOmci->RxBaseLineMessageCountValid = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "RxExtendedMessageCountValid"))
     {
-        gponOmci->RxExtendedMessageCountValid = strtoul(pValue,&err,10);
+        gponOmci->RxExtendedMessageCountValid = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "MicErrors"))
     {
-        gponOmci->MicErrors = strtoul(pValue,&err,10);
+        gponOmci->MicErrors = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     
@@ -676,7 +676,7 @@ ANSC_STATUS Map_hal_dml_gem(DML_GEM_LIST_T* gponGemList,char* ParamName, char* p
 
     if (strstr(ParamName, "PortId"))
     {
-        pGem->PortId = strtoul(pValue,&err,10);
+        pGem->PortId = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if (strstr(ParamName, "TrafficType"))
@@ -686,12 +686,12 @@ ANSC_STATUS Map_hal_dml_gem(DML_GEM_LIST_T* gponGemList,char* ParamName, char* p
     }
     else if (strstr(ParamName, "TransmittedFrames"))
     {
-        pGem->TransmittedFrames = strtoul(pValue,&err,10);
+        pGem->TransmittedFrames = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if (strstr(ParamName, "ReceivedFrames"))
     {
-        pGem->ReceivedFrames = strtoul(pValue,&err,10);
+        pGem->ReceivedFrames = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if (strstr(ParamName, "Ingress"))
@@ -705,17 +705,17 @@ ANSC_STATUS Map_hal_dml_gem(DML_GEM_LIST_T* gponGemList,char* ParamName, char* p
         {
             if (strstr(ParamName, "Vid"))
             {
-                pGem->EthernetFlow.Ingress.SVLAN.Vid = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Ingress.SVLAN.Vid = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
             else if (strstr(ParamName, "Pcp"))
             {
-                pGem->EthernetFlow.Ingress.SVLAN.Pcp = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Ingress.SVLAN.Pcp = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
             else if (strstr(ParamName, "Dei"))
             {
-                pGem->EthernetFlow.Ingress.SVLAN.Dei = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Ingress.SVLAN.Dei = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
         }
@@ -723,17 +723,17 @@ ANSC_STATUS Map_hal_dml_gem(DML_GEM_LIST_T* gponGemList,char* ParamName, char* p
         {
             if (strstr(ParamName, "Vid"))
             {
-                pGem->EthernetFlow.Ingress.CVLAN.Vid = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Ingress.CVLAN.Vid = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
             else if (strstr(ParamName, "Pcp"))
             {
-                pGem->EthernetFlow.Ingress.CVLAN.Pcp = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Ingress.CVLAN.Pcp = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
             else if (strstr(ParamName, "Dei"))
             {
-                pGem->EthernetFlow.Ingress.CVLAN.Dei = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Ingress.CVLAN.Dei = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
         }
@@ -749,17 +749,17 @@ ANSC_STATUS Map_hal_dml_gem(DML_GEM_LIST_T* gponGemList,char* ParamName, char* p
         {
             if (strstr(ParamName, "Vid"))
             {
-                pGem->EthernetFlow.Egress.SVLAN.Vid = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Egress.SVLAN.Vid = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
             else if (strstr(ParamName, "Pcp"))
             {
-                pGem->EthernetFlow.Egress.SVLAN.Pcp = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Egress.SVLAN.Pcp = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
             else if (strstr(ParamName, "Dei"))
             {
-                pGem->EthernetFlow.Egress.SVLAN.Dei = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Egress.SVLAN.Dei = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
         }
@@ -767,17 +767,17 @@ ANSC_STATUS Map_hal_dml_gem(DML_GEM_LIST_T* gponGemList,char* ParamName, char* p
         {
             if (strstr(ParamName, "Vid"))
             {
-                pGem->EthernetFlow.Egress.CVLAN.Vid = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Egress.CVLAN.Vid = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
             else if (strstr(ParamName, "Pcp"))
             {
-                pGem->EthernetFlow.Egress.CVLAN.Pcp = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Egress.CVLAN.Pcp = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
             else if (strstr(ParamName, "Dei"))
             {
-                pGem->EthernetFlow.Egress.CVLAN.Dei = strtoul(pValue,&err,10);
+                pGem->EthernetFlow.Egress.CVLAN.Dei = strtoull(pValue, &err, 10);
                 retStatus = ANSC_STATUS_SUCCESS;
             }
         }
@@ -802,7 +802,7 @@ void parseStrInput_InterDomainName( DML_VEIP* pVeip, char *pValue)
     
     if(pValue == NULL || pVeip == NULL)
     {
-        fprintf(stderr, "Invalide Input\n");
+        fprintf(stderr, "Invalid Input\n");
     }
 
     strncpy(strInterDomainName, pValue, MAX_STR_LEN);
@@ -845,24 +845,24 @@ void parseStrInput_InterDomainName( DML_VEIP* pVeip, char *pValue)
 
        if (token != NULL)
        {
-           pVeip->EthernetFlow.Ingress.QVLAN.Vid = strtoul(token,&err,10);
-           pVeip->EthernetFlow.Egress.QVLAN.Vid  = strtoul(token,&err,10);
+           pVeip->EthernetFlow.Ingress.QVLAN.Vid = strtoull(token, &err, 10);
+           pVeip->EthernetFlow.Egress.QVLAN.Vid  = strtoull(token, &err, 10);
        }
 
        token = strtok(NULL, "-");
 
        if (token != NULL)
        {
-           pVeip->EthernetFlow.Ingress.QVLAN.Pcp = strtoul(token,&err,10);
-           pVeip->EthernetFlow.Egress.QVLAN.Pcp  = strtoul(token,&err,10);
+           pVeip->EthernetFlow.Ingress.QVLAN.Pcp = strtoull(token, &err, 10);
+           pVeip->EthernetFlow.Egress.QVLAN.Pcp  = strtoull(token, &err, 10);
        }
 
        token = strtok(NULL, "-");
 
        if (token != NULL)
        {
-           pVeip->EthernetFlow.Ingress.QVLAN.Dei = strtoul(token,&err,10);
-           pVeip->EthernetFlow.Egress.QVLAN.Dei  = strtoul(token,&err,10);
+           pVeip->EthernetFlow.Ingress.QVLAN.Dei = strtoull(token, &err, 10);
+           pVeip->EthernetFlow.Egress.QVLAN.Dei  = strtoull(token, &err, 10);
        }
    }
 }
@@ -906,7 +906,7 @@ ANSC_STATUS Map_hal_dml_veip(DML_VEIP_LIST_T* gponVeipList, char* ParamName, cha
     
     if (strstr(ParamName, "MeId"))
     {
-        pVeip->MeId = strtoul(pValue,&err,10);
+        pVeip->MeId = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if (strstr(ParamName, "AdministrativeState"))
@@ -995,7 +995,7 @@ ANSC_STATUS Map_hal_dml_tr69(PDML_TR69 gponTr69,char * ParamName, char * pValue)
     }
     else if( strstr(ParamName, "AssociatedTag"))
     {
-        gponTr69->AssociatedTag = strtoul(pValue, &err, 10);
+        gponTr69->AssociatedTag = strtoull(pValue, &err, 10);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     
