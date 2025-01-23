@@ -44,11 +44,19 @@ ANSC_STATUS GponMgr_subscribe_hal_events(void)
                 sprintf(strName, GPON_HAL_PM_STATUS, pGponPhy->uInstanceNumber);
 
                 ret = GponHal_Event_Subscribe(&eventcb_PhysicalMediaStatus, strName, JSON_SUBSCRIBE_ON_CHANGE);
-                if(ret != ANSC_STATUS_SUCCESS) break;
+                if(ret != ANSC_STATUS_SUCCESS)
+                {
+                    CcspTraceError(("%s %d - Failed to subscribe to %s\n", __FUNCTION__, __LINE__, strName ));
+                    break;
+                }
 
                 sprintf(strName, GPON_HAL_PM_ALARM, pGponPhy->uInstanceNumber);
                 ret = GponHal_Event_Subscribe(&eventcb_PhysicalMediaAlarmsAll, strName, JSON_SUBSCRIBE_ON_CHANGE);
-                if(ret != ANSC_STATUS_SUCCESS) break;
+                if(ret != ANSC_STATUS_SUCCESS)
+                {
+                    CcspTraceError(("%s %d - Failed to subscribe to %s\n", __FUNCTION__, __LINE__, strName ));
+                    break;
+                }
             }
         }
 
@@ -59,11 +67,19 @@ ANSC_STATUS GponMgr_subscribe_hal_events(void)
             {
                 sprintf(strName, GPON_HAL_VEIP_ADMIN_STATE, idx);
                 ret = GponHal_Event_Subscribe(&eventcb_VeipAdministrativeState, strName, JSON_SUBSCRIBE_ON_CHANGE);
-                if(ret != ANSC_STATUS_SUCCESS) break;
+                if(ret != ANSC_STATUS_SUCCESS)
+                {
+                    CcspTraceError(("%s %d - Failed to subscribe to %s\n", __FUNCTION__, __LINE__, strName ));
+                    break;
+                }
 
                 sprintf(strName, GPON_HAL_VEIP_OPER_STATE, idx);
                 ret = GponHal_Event_Subscribe(&eventcb_VeipOperationalState, strName, JSON_SUBSCRIBE_ON_CHANGE);
-                if(ret != ANSC_STATUS_SUCCESS) break;
+                if(ret != ANSC_STATUS_SUCCESS)
+                {
+                    CcspTraceError(("%s %d - Failed to subscribe to %s\n", __FUNCTION__, __LINE__, strName ));
+                    break;
+                }
             }
         }
 
@@ -73,7 +89,10 @@ ANSC_STATUS GponMgr_subscribe_hal_events(void)
 
             sprintf(strName, GPON_HAL_PLOAM_REG_STATE);
             ret = GponHal_Event_Subscribe(&eventcb_PloamRegistrationState, strName, JSON_SUBSCRIBE_ON_CHANGE);
-
+            if(ret != ANSC_STATUS_SUCCESS)
+            {
+                CcspTraceError(("%s %d - Failed to subscribe to %s\n", __FUNCTION__, __LINE__, strName ));
+            }
         }
 
 
@@ -104,14 +123,14 @@ ANSC_STATUS GponMgr_Controller_Init()
     returnStatus = GponMgr_subscribe_hal_events();
     if(returnStatus != ANSC_STATUS_SUCCESS)
     {
-        CcspTraceInfo(("%s %d - Error in HAL subscribe events. \n", __FUNCTION__, __LINE__ ));
+        CcspTraceError(("%s %d - Error in HAL subscribe events\n", __FUNCTION__, __LINE__ ));
         return returnStatus;
     }
 
     returnStatus = GponMgr_send_hal_configuration();
     if(returnStatus != ANSC_STATUS_SUCCESS)
     {
-        CcspTraceInfo(("%s %d - Error in sending HAL configuration. \n", __FUNCTION__, __LINE__ ));
+        CcspTraceError(("%s %d - Error in sending HAL configuration\n", __FUNCTION__, __LINE__ ));
         return returnStatus;
     }
 

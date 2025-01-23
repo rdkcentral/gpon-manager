@@ -202,7 +202,11 @@ void GponMgrDml_SetDefaultPhyMedia(DML_PHY_MEDIA_CTRL_T* gponPhyMediaData)
         gponPhyMedia->Alarm.LCDG = INACTIVE;
         gponPhyMedia->Alarm.TF = INACTIVE;
         gponPhyMedia->Alarm.ROGUE = INACTIVE;        
-    }    
+    }
+    else
+    {
+        CcspTraceWarning(("%s %d - Failed to set Default Values for Physical media\n", __FUNCTION__, __LINE__));
+    }
 }
 
 void GponMgrDml_SetDefaultGtc(DML_GTC* gponGtcData)
@@ -219,6 +223,10 @@ void GponMgrDml_SetDefaultGtc(DML_GTC* gponGtcData)
         gponGtcData->FramesLost = 0;
         gponGtcData->LastFetchedTime = 0;
     }    
+    else
+    {
+        CcspTraceWarning(("%s %d - Failed to set Default values for GTC\n", __FUNCTION__, __LINE__));
+    }
 }
 
 void GponMgrDml_SetDefaultPloam(DML_PLOAM* gponPloamData)
@@ -237,6 +245,10 @@ void GponMgrDml_SetDefaultPloam(DML_PLOAM* gponPloamData)
         gponPloamData->RegistrationTimers.TO2 = 0;
         gponPloamData->LastFetchedTime = 0;
     }    
+    else
+    {
+        CcspTraceWarning(("%s %d - Failed to set default values for Ploam\n", __FUNCTION__, __LINE__));
+    }
 }
 
 void GponMgrDml_SetDefaultOmci(DML_OMCI* gponOmciData)
@@ -248,6 +260,10 @@ void GponMgrDml_SetDefaultOmci(DML_OMCI* gponOmciData)
         gponOmciData->MicErrors = 0;
         gponOmciData->LastFetchedTime = 0;
     }    
+    else
+    {
+        CcspTraceWarning(("%s %d - Failed to set Default values for Omci\n", __FUNCTION__, __LINE__));
+    }
 }
 
 void GponMgrDml_SetDefaultGem(DML_GEM_CTRL_T* gponGemData)
@@ -280,6 +296,10 @@ void GponMgrDml_SetDefaultGem(DML_GEM_CTRL_T* gponGemData)
         gponGem->EthernetFlow.Egress.CVLAN.Pcp = 0;
         gponGem->EthernetFlow.Egress.CVLAN.Dei = 0;
         
+    }
+    else
+    {
+        CcspTraceWarning(("%s %d - Failed to set Default values for Gem\n", __FUNCTION__, __LINE__));
     }    
 }
 
@@ -307,7 +327,11 @@ void GponMgrDml_SetDefaultVeip(DML_VEIP_CTRL_T* gponVeipData)
         gponVeip->EthernetFlow.Egress.QVLAN.Vid = 0;
         gponVeip->EthernetFlow.Egress.QVLAN.Pcp = 0;
         gponVeip->EthernetFlow.Egress.QVLAN.Dei = 0;
-    }    
+    }
+    else
+    {
+        CcspTraceWarning(("%s %d - Failed to set default values for VEIP\n", __FUNCTION__, __LINE__));
+    }
 }
 
 void GponMgrDml_SetDefaultTr69(DML_TR69* gponTr69Data)
@@ -318,6 +342,10 @@ void GponMgrDml_SetDefaultTr69(DML_TR69* gponTr69Data)
         gponTr69Data->AssociatedTag = 0;
         gponTr69Data->LastFetchedTime = 0;
     }    
+    else
+    {
+        CcspTraceWarning(("%s %d - Failed to set Default values for TR69\n", __FUNCTION__, __LINE__));
+    }
 }
 
 
@@ -352,6 +380,10 @@ void GponMgrDml_SetDefaultData(GPON_DML_DATA* pGponData)
         }
         
         GponMgrDml_SetDefaultTr69(&( pGponData->gpon.Tr69));
+    }
+    else
+    {
+        CcspTraceWarning(("%s %d - Failed to set Default Data\n", __FUNCTION__, __LINE__));
     }
 }
 

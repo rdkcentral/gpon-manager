@@ -203,9 +203,11 @@ GPON_LINK_STATE_MACHINE_T gpon_sm_transition_LinkDown_to_LinkUp(GPON_LINK_SM_CTR
     ret = gpon_config_veip_interface(gpon_sm_ctrl);
     if(ret == ANSC_STATUS_SUCCESS)
     {
+        CcspTraceInfo(("%s %d - TRANSITION Link to Up\n", __FUNCTION__, __LINE__));
         return GSM_LINK_UP;
     }
 
+    CcspTraceInfo(("%s %d - TRANSITION Link is Down\n", __FUNCTION__, __LINE__));
     return GSM_LINK_DOWN;
 }
 
@@ -217,9 +219,11 @@ GPON_LINK_STATE_MACHINE_T gpon_sm_transition_LinkUp_to_LinkDown(GPON_LINK_SM_CTR
     ret = gpon_disable_veip_interface(gpon_sm_ctrl);
     if(ret == ANSC_STATUS_SUCCESS)
     {
+        CcspTraceInfo(("%s %d - TRANSITION Link to Down\n", __FUNCTION__, __LINE__));
         return GSM_LINK_DOWN;
     }
 
+    CcspTraceInfo(("%s %d - TRANSITION Link is Up\n", __FUNCTION__, __LINE__));
     return GSM_LINK_UP;
 }
 
@@ -227,6 +231,7 @@ GPON_LINK_STATE_MACHINE_T gpon_sm_transition_Exit(GPON_LINK_SM_CTRL_T* gpon_sm_c
 {
     gpon_sm_ctrl->sm_running = false;
 
+    CcspTraceInfo(("%s %d - TRANSITION to Exit\n", __FUNCTION__, __LINE__));
     return GSM_LINK_DOWN;
 }
 
@@ -420,7 +425,7 @@ ANSC_STATUS GponMgr_Link_StateMachine_Start(DML_VEIP* pGponVeip)
 
     if(pGponVeip == NULL)
     {
-        CcspTraceInfo(("%s %d Error: Veip interface is invalid. \n", __FUNCTION__, __LINE__ ));
+        CcspTraceError(("%s %d Error: Veip interface is invalid\n", __FUNCTION__, __LINE__ ));
         return ANSC_STATUS_FAILURE;
     }
 
@@ -428,7 +433,7 @@ ANSC_STATUS GponMgr_Link_StateMachine_Start(DML_VEIP* pGponVeip)
     gpon_sm_ctrl = GponMgr_Link_SM_Init();
     if(gpon_sm_ctrl == NULL)
     {
-        CcspTraceInfo(("%s %d Error: Failed to allocate memory. \n", __FUNCTION__, __LINE__ ));
+        CcspTraceError(("%s %d Error: Failed to allocate memory\n", __FUNCTION__, __LINE__ ));
         return ANSC_STATUS_FAILURE;
     }
 
@@ -439,7 +444,7 @@ ANSC_STATUS GponMgr_Link_StateMachine_Start(DML_VEIP* pGponVeip)
     iErrorCode = pthread_create( &StateMachineThread, NULL, &GponMgr_Link_SM_Thread, (void*) gpon_sm_ctrl);
     if( 0 != iErrorCode )
     {
-        CcspTraceInfo(("%s %d Error: Failed to start State Machine Thread error code: %d \n", __FUNCTION__, __LINE__, iErrorCode ));
+        CcspTraceError(("%s %d Error: Failed to start State Machine Thread error code: %d\n", __FUNCTION__, __LINE__, iErrorCode ));
     }
 
     return returnStatus;

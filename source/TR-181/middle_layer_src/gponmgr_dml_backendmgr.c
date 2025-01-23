@@ -161,7 +161,7 @@ ANSC_STATUS GponMgrDml_BackEndManagerInitialize(ANSC_HANDLE hThisObject)
 
     if (pMyObject == NULL)
     {
-        AnscTraceError(("%s:%d:: Pointer is null!!\n", __FUNCTION__, __LINE__));
+        AnscTraceError(("%s : %d :: Pointer is null!!\n", __FUNCTION__, __LINE__));
         return ANSC_STATUS_FAILURE;
     }
 
