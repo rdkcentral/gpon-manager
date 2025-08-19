@@ -114,7 +114,6 @@ ANSC_STATUS ssp_Mbi_MessageBusEngage (char * component_id,char * config_file,cha
 
     CcspBaseIf_SetCallback(bus_handle, &cb);
 
-
     /* Register event/signal */
     returnStatus =
         CcspBaseIf_Register_Event

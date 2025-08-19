@@ -26,8 +26,8 @@ GponManager_DEPENDENCIES = \
 GponManager_CPPFLAGS = -I$(top_srcdir)/source/TR-181/middle_layer_src \
                        -I$(top_srcdir)/source/TR-181/include
 
-GponManager_CFLAGS = -DFEATURE_SUPPORT_RDKLOG $(DBUS_CFLAGS) $(SYSTEMD_CFLAGS)
+GponManager_CFLAGS = -DFEATURE_SUPPORT_RDKLOG $(SYSTEMD_CFLAGS)
 GponManager_SOURCES = ssp_action.c ssp_messagebus_interface.c ssp_main.c gponmgr_controller.c gponmgr_link_state_machine.c dm_pack_datamodel.c
-GponManager_LDFLAGS = -lccsp_common -lrdkloggers -lsecure_wrapper $(DBUS_LIBS) $(SYSTEMD_LDFLAGS)
+GponManager_LDFLAGS = -lccsp_common -lrdkloggers -lsecure_wrapper $(SYSTEMD_LDFLAGS)
 GponManager_LDADD = $(GponManager_DEPENDENCIES)
 GponManager_CFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"
