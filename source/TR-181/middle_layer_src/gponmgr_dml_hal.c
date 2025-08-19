@@ -43,6 +43,12 @@
         return ANSC_STATUS_FAILURE;                                \
     }
 
+#define FREE_JSON_OBJECT(expr) \
+    if (expr)                  \
+    {                          \
+        json_object_put(expr); \
+    }
+
 /**
  * gpon_manager_conf.json contains the port number of server as well as schema path.
  * This port number can be used in manager as well as
@@ -241,8 +247,7 @@ static json_object *create_json_request_message(eActionType request_type, const 
 
 ANSC_STATUS GponHal_setParam(char *pName, eParamType pType, char *pValue)
 {
-
-    json_object *jreply_msg;
+    json_object *jreply_msg = NULL;
     json_object *jrequest;
     int rc = ANSC_STATUS_FAILURE;
     json_bool status = FALSE;
@@ -259,6 +264,8 @@ ANSC_STATUS GponHal_setParam(char *pName, eParamType pType, char *pValue)
     if (json_hal_client_send_and_get_reply(jrequest, &jreply_msg) == RETURN_ERR)
     {
         fprintf(stderr,"%s - %d Failed to get reply for the json request \n", __FUNCTION__, __LINE__);
+        FREE_JSON_OBJECT(jrequest);
+        FREE_JSON_OBJECT(jreply_msg);
         return rc;
     }
 
@@ -291,16 +298,6 @@ ANSC_STATUS GponHal_setParam(char *pName, eParamType pType, char *pValue)
     }
     return rc;
 }
-
-
-
-#define FREE_JSON_OBJECT(expr) \
-    if(expr)                   \
-	{                          \
-        json_object_put(expr); \
-	}                          \
-
-
 
 ANSC_STATUS get_event_param(const char* msg, const int len, char* event_name, char* event_val)
 {
@@ -744,6 +741,8 @@ ANSC_STATUS GponHal_get_tr69(PDML_TR69 pTr69)
     if (json_hal_client_send_and_get_reply(jrequest, &jreply_msg) == RETURN_ERR)
     {
         fprintf(stderr,"%s - %d Failed to get reply for the json request \n", __FUNCTION__, __LINE__);
+        FREE_JSON_OBJECT(jrequest);
+        FREE_JSON_OBJECT(jreply_msg);
         return ANSC_STATUS_FAILURE;
     }
 
@@ -807,6 +806,8 @@ ANSC_STATUS GponHal_get_omci(PDML_OMCI pOmci)
     if (json_hal_client_send_and_get_reply(jrequest, &jreply_msg) == RETURN_ERR)
     {
         fprintf(stderr,"%s - %d Failed to get reply for the json request \n", __FUNCTION__, __LINE__);
+        FREE_JSON_OBJECT(jrequest);
+        FREE_JSON_OBJECT(jreply_msg);
         return ANSC_STATUS_FAILURE;
     }
 
@@ -872,6 +873,8 @@ ANSC_STATUS GponHal_get_ploam(PDML_PLOAM pPloam)
     if (json_hal_client_send_and_get_reply(jrequest, &jreply_msg) == RETURN_ERR)
     {
         fprintf(stderr,"%s - %d Failed to get reply for the json request \n", __FUNCTION__, __LINE__);
+        FREE_JSON_OBJECT(jrequest);
+        FREE_JSON_OBJECT(jreply_msg);
         return ANSC_STATUS_FAILURE;
     }
 
@@ -938,6 +941,8 @@ ANSC_STATUS GponHal_get_gtc(PDML_GTC pGtc)
     if (json_hal_client_send_and_get_reply(jrequest, &jreply_msg) == RETURN_ERR)
     {
         fprintf(stderr,"%s - %d Failed to get reply for the json request \n", __FUNCTION__, __LINE__);
+        FREE_JSON_OBJECT(jrequest);
+        FREE_JSON_OBJECT(jreply_msg);
         return ANSC_STATUS_FAILURE;
     }
 
@@ -996,6 +1001,8 @@ ANSC_STATUS GponHal_get_pm(DML_PHY_MEDIA_LIST_T* pPhysicalMediaList)
     if (json_hal_client_send_and_get_reply(jrequest, &jreply_msg) == RETURN_ERR)
     {
         fprintf(stderr,"%s - %d Failed to get reply for the json request \n", __FUNCTION__, __LINE__);
+        FREE_JSON_OBJECT(jrequest);
+        FREE_JSON_OBJECT(jreply_msg);
         return ANSC_STATUS_FAILURE;
     }
 
@@ -1073,6 +1080,8 @@ ANSC_STATUS GponHal_get_gem(DML_GEM_LIST_T* pGponGemList)
     if (json_hal_client_send_and_get_reply(jrequest, &jreply_msg) == RETURN_ERR)
     {
         fprintf(stderr,"%s - %d Failed to get reply for the json request \n", __FUNCTION__, __LINE__);
+        FREE_JSON_OBJECT(jrequest);
+        FREE_JSON_OBJECT(jreply_msg);
         return ANSC_STATUS_FAILURE;
     }
 
@@ -1156,6 +1165,8 @@ ANSC_STATUS GponHal_get_veip(DML_VEIP_LIST_T* pGponVeipList)
     if (json_hal_client_send_and_get_reply(jrequest, &jreply_msg) == RETURN_ERR)
     {
         fprintf(stderr,"%s - %d Failed to get reply for the json request \n", __FUNCTION__, __LINE__);
+        FREE_JSON_OBJECT(jrequest);
+        FREE_JSON_OBJECT(jreply_msg);
         return ANSC_STATUS_FAILURE;
     }
 
