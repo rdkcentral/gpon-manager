@@ -41,6 +41,7 @@
 #include "gponmgr_dml_hal.h"
 #include "gponmgr_dml_data.h"
 #include "gponmgr_dml_internal.h"
+#include "gponmgr_xpon_rbus.h"
 
 extern void * g_pDslhDmlAgent;
 
@@ -148,6 +149,11 @@ ANSC_STATUS GponMgrDml_Initialize ( ANSC_HANDLE hThisObject )
         return returnStatus;
     }
 
+    if (GponMgrXponRbus_Init() != 0)
+    {
+        CcspTraceError(("XPON RBUS initialization failed; legacy Device.X_RDK_ONT remains available\n"));
+    }
+
     return returnStatus;
 }
 
@@ -177,6 +183,8 @@ ANSC_STATUS GponMgrDml_Remove ( ANSC_HANDLE hThisObject )
 
     ANSC_STATUS                 returnStatus    = ANSC_STATUS_SUCCESS;
     PDATAMODEL_GPON_SERVICES    pMyObject       = (PDATAMODEL_GPON_SERVICES)hThisObject;
+
+    GponMgrXponRbus_Close();
 
     //delete DML data
     GponMgrDml_DataDelete();

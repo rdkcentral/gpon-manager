@@ -1008,7 +1008,7 @@ ANSC_STATUS GponHal_get_pm(DML_PHY_MEDIA_LIST_T* pPhysicalMediaList)
 
 
     //mark list as outdated
-    for (int i = 0; i < pPhysicalMediaList->ulQuantity; ++i)
+    for (int i = 0; i < GPON_DATA_MAX_PM; ++i)
     {
         if(pPhysicalMediaList->pdata[i] != NULL)
         {
@@ -1031,7 +1031,7 @@ ANSC_STATUS GponHal_get_pm(DML_PHY_MEDIA_LIST_T* pPhysicalMediaList)
 
 
     //remove outdated
-    for (int i = 0; i < pPhysicalMediaList->ulQuantity; ++i)
+    for (int i = 0; i < GPON_DATA_MAX_PM; ++i)
     {
         if(pPhysicalMediaList->pdata[i] != NULL)
         {
@@ -1087,7 +1087,7 @@ ANSC_STATUS GponHal_get_gem(DML_GEM_LIST_T* pGponGemList)
 
 
     //mark list as outdated
-    for (int i = 0; i < pGponGemList->ulQuantity; ++i)
+    for (int i = 0; i < GPON_DATA_MAX_GEM; ++i)
     {
         if(pGponGemList->pdata[i] != NULL)
         {
@@ -1110,7 +1110,7 @@ ANSC_STATUS GponHal_get_gem(DML_GEM_LIST_T* pGponGemList)
 
 
     //remove outdated
-    for (int i = 0; i < pGponGemList->ulQuantity; ++i)
+    for (int i = 0; i < GPON_DATA_MAX_GEM; ++i)
     {
         if(pGponGemList->pdata[i] != NULL)
         {
@@ -1172,7 +1172,7 @@ ANSC_STATUS GponHal_get_veip(DML_VEIP_LIST_T* pGponVeipList)
 
 
     //mark list as outdated
-    for (int i = 0; i < pGponVeipList->ulQuantity; ++i)
+    for (int i = 0; i < GPON_DATA_MAX_VEIP; ++i)
     {
         if(pGponVeipList->pdata[i] != NULL)
         {
@@ -1195,7 +1195,7 @@ ANSC_STATUS GponHal_get_veip(DML_VEIP_LIST_T* pGponVeipList)
 
 
     //remove outdated
-    for (int i = 0; i < pGponVeipList->ulQuantity; ++i)
+    for (int i = 0; i < GPON_DATA_MAX_VEIP; ++i)
     {
         if(pGponVeipList->pdata[i] != NULL)
         {

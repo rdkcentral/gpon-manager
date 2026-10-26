@@ -75,6 +75,23 @@ AC_ARG_ENABLE([notify],
 AC_SUBST(SYSTEMD_CFLAGS)
 AC_SUBST(SYSTEMD_LDFLAGS)
 
+AC_ARG_VAR([RBUS_CFLAGS], [Compiler flags for RBUS headers])
+AC_ARG_VAR([RBUS_LIBS], [Linker flags for RBUS])
+AS_IF([test -z "$RBUS_LIBS"], [RBUS_LIBS="-lrbus"])
+saved_CPPFLAGS="$CPPFLAGS"
+saved_LIBS="$LIBS"
+CPPFLAGS="$CPPFLAGS $RBUS_CFLAGS"
+LIBS="$RBUS_LIBS $LIBS"
+AC_CHECK_HEADER([rbus.h], [],
+  [AC_MSG_ERROR([RBUS headers are required; set RBUS_CFLAGS for the target sysroot])])
+AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <rbus.h>]],
+  [[rbus_registerDynamicTableSyncHandler((rbusHandle_t)0, "Device.XPON.ONU.", 0);]])], [],
+  [AC_MSG_ERROR([RBUS with dynamic table synchronization is required; set RBUS_LIBS])])
+CPPFLAGS="$saved_CPPFLAGS"
+LIBS="$saved_LIBS"
+AC_SUBST(RBUS_CFLAGS)
+AC_SUBST(RBUS_LIBS)
+
 dnl Checks for header files.
 AC_CHECK_HEADERS([limits.h memory.h stdlib.h string.h sys/socket.h unistd.h])
 
@@ -90,5 +107,6 @@ AC_CONFIG_FILES([Makefile
                 source/Makefile
                 source/TR-181/Makefile
                 source/TR-181/middle_layer_src/Makefile
+                source/TR-181/rbus/Makefile
                 source/GponManager/Makefile])
 AC_OUTPUT

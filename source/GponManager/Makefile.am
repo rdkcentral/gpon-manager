@@ -21,7 +21,8 @@ bin_PROGRAMS = GponManager
 
 GponManager_DEPENDENCIES = \
         $(EXTRA_DEPENDENCIES) \
-        ${top_builddir}/source/TR-181/middle_layer_src/libRdkGponManager_middle_layer_src.la
+        ${top_builddir}/source/TR-181/middle_layer_src/libRdkGponManager_middle_layer_src.la \
+        ${top_builddir}/source/TR-181/rbus/libRdkGponManager_rbus.la
 
 GponManager_CPPFLAGS = -I$(top_srcdir)/source/TR-181/middle_layer_src \
                        -I$(top_srcdir)/source/TR-181/include
@@ -29,5 +30,5 @@ GponManager_CPPFLAGS = -I$(top_srcdir)/source/TR-181/middle_layer_src \
 GponManager_CFLAGS = -DFEATURE_SUPPORT_RDKLOG $(SYSTEMD_CFLAGS)
 GponManager_SOURCES = ssp_action.c ssp_messagebus_interface.c ssp_main.c gponmgr_controller.c gponmgr_link_state_machine.c dm_pack_datamodel.c
 GponManager_LDFLAGS = -lccsp_common -lrdkloggers -lsecure_wrapper $(SYSTEMD_LDFLAGS)
-GponManager_LDADD = $(GponManager_DEPENDENCIES)
+GponManager_LDADD = $(GponManager_DEPENDENCIES) $(RBUS_LIBS)
 GponManager_CFLAGS += -DGIT_VERSION=\"$(GIT_VERSION)\"

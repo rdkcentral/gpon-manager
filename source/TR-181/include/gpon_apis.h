@@ -36,6 +36,7 @@
 #ifndef  _GPON_APIS_H
 #define  _GPON_APIS_H
 
+#include <stdint.h>
 #include "ssp_global.h"
 
 /***********************************
@@ -105,14 +106,14 @@ DML_ALARM, *PDML_ALARM;
 typedef struct
 _DML_GTC
 {
-    ULONG         CorrectedFecBytes;
-    ULONG         CorrectedFecCodeWords;
-    ULONG         UnCorrectedFecCodeWords;
-    ULONG         TotalFecCodeWords;
-    ULONG         HecErrorCount;
-    ULONG         PSBdHecErrors;
-    ULONG         FrameHecErrors;
-    ULONG         FramesLost;
+    uint64_t      CorrectedFecBytes;
+    uint64_t      CorrectedFecCodeWords;
+    uint64_t      UnCorrectedFecCodeWords;
+    uint64_t      TotalFecCodeWords;
+    uint64_t      HecErrorCount;
+    uint64_t      PSBdHecErrors;
+    uint64_t      FrameHecErrors;
+    uint64_t      FramesLost;
     ULONG         LastFetchedTime;
 }
 DML_GTC, *PDML_GTC;
@@ -215,7 +216,7 @@ _DML_PHY_MEDIA
     DML_PHYMEDIASTATUS_ENUM     Status;
     DML_REDUNDANCYSTATE_ENUM    RedundancyState;
 #if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-    CHAR                        Alias[64];
+    CHAR                        Alias[65];
     UINT                        LastChange;
     CHAR                        LowerLayers[1024];
     BOOLEAN                     Upstream;
@@ -352,8 +353,8 @@ _DML_GEM
     ULONG             uInstanceNumber;
     ULONG             PortId;
     DML_CAST_ENUM     TrafficType;
-    ULONG             TransmittedFrames;
-    ULONG             ReceivedFrames;
+    uint64_t          TransmittedFrames;
+    uint64_t          ReceivedFrames;
     DML_GEM_ETHFLOW   EthernetFlow;
 }
 DML_GEM, *PDML_GEM;

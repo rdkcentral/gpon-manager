@@ -165,7 +165,7 @@ void GponMgrDml_SetDefaultPhyMedia(DML_PHY_MEDIA_CTRL_T* gponPhyMediaData)
         gponPhyMedia->Status = NotPresent;
         gponPhyMedia->RedundancyState = Active;
 #if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-        memset(gponPhyMedia->Alias, 0, 256);
+        memset(gponPhyMedia->Alias, 0, sizeof(gponPhyMedia->Alias));
         gponPhyMedia->LastChange = 0;
         memset(gponPhyMedia->LowerLayers, 0, 256);
         gponPhyMedia->Upstream = false;

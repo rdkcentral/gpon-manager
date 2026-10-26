@@ -232,25 +232,23 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     else if( strstr(ParamName, "PonMode"))
     {
         //GPON(0),XGPON(1),NGPON2(2),XGPON2(3)
-        if(strstr(pValue,"GPON"))
+        if(strcmp(pValue, "GPON") == 0 || strcmp(pValue, "G-PON") == 0)
         {
             pPhyMedia->PonMode = GPON;
             retStatus = ANSC_STATUS_SUCCESS;
         }
-        else if(strstr(pValue,"XGPON"))
+        else if(strcmp(pValue, "XG-PON") == 0 || strcmp(pValue, "XGPON") == 0)
         {
-            if (strstr(pValue,"XGPON2"))
-            {
-                pPhyMedia->PonMode = XGPON2;
+            pPhyMedia->PonMode = XGPON;
             retStatus = ANSC_STATUS_SUCCESS;
-            }
-            else
-            {
-                pPhyMedia->PonMode = XGPON;
-            retStatus = ANSC_STATUS_SUCCESS;
-            }
         }
-        else if (strstr(pValue,"NGPON2"))
+        else if(strcmp(pValue, "XGS-PON") == 0 || strcmp(pValue, "XGS-PON2") == 0 ||
+                strcmp(pValue, "XGPON2") == 0)
+        {
+            pPhyMedia->PonMode = XGPON2;
+            retStatus = ANSC_STATUS_SUCCESS;
+        }
+        else if(strcmp(pValue, "NG-PON2") == 0 || strcmp(pValue, "NGPON2") == 0)
         {
             pPhyMedia->PonMode = NGPON2;
             retStatus = ANSC_STATUS_SUCCESS;
@@ -299,8 +297,16 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
 #if defined(WAN_MANAGER_UNIFICATION_ENABLED)
     else if( strstr(ParamName, "Enable"))
     {
-        pPhyMedia->Enable = strstr(pValue,"1")?TRUE:FALSE;
-        retStatus = ANSC_STATUS_SUCCESS;
+        if (strcmp(pValue, "true") == 0 || strcmp(pValue, "1") == 0)
+        {
+            pPhyMedia->Enable = TRUE;
+            retStatus = ANSC_STATUS_SUCCESS;
+        }
+        else if (strcmp(pValue, "false") == 0 || strcmp(pValue, "0") == 0)
+        {
+            pPhyMedia->Enable = FALSE;
+            retStatus = ANSC_STATUS_SUCCESS;
+        }
     }
 #endif
     else if( strstr(ParamName, "Status"))
@@ -311,7 +317,7 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
             pPhyMedia->Status = Up;
             retStatus = ANSC_STATUS_SUCCESS;
         }
-        else if(strstr(pValue,"Down"))
+        else if(strcmp(pValue,"Down") == 0)
         {
             pPhyMedia->Status = Down;
             retStatus = ANSC_STATUS_SUCCESS;
@@ -358,8 +364,11 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
 #if defined(WAN_MANAGER_UNIFICATION_ENABLED)
     else if( strstr(ParamName, "Alias"))
     {
-        strncpy(pPhyMedia->Alias,pValue,strlen(pValue)+1);
-        retStatus = ANSC_STATUS_SUCCESS;
+        if (strlen(pValue) < sizeof(pPhyMedia->Alias))
+        {
+            memcpy(pPhyMedia->Alias, pValue, strlen(pValue) + 1);
+            retStatus = ANSC_STATUS_SUCCESS;
+        }
     }
     else if( strstr(ParamName, "LastChange"))
     {
@@ -373,8 +382,16 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     }
     else if( strstr(ParamName, "Upstream"))
     {
-        pPhyMedia->Upstream = strstr(pValue,"1")?TRUE:FALSE;
-        retStatus = ANSC_STATUS_SUCCESS;
+        if (strcmp(pValue, "true") == 0 || strcmp(pValue, "1") == 0)
+        {
+            pPhyMedia->Upstream = TRUE;
+            retStatus = ANSC_STATUS_SUCCESS;
+        }
+        else if (strcmp(pValue, "false") == 0 || strcmp(pValue, "0") == 0)
+        {
+            pPhyMedia->Upstream = FALSE;
+            retStatus = ANSC_STATUS_SUCCESS;
+        }
     }
 #endif
 

@@ -23,6 +23,7 @@ ACLOCAL_AMFLAGS = -I m4
 noinst_LTLIBRARIES = libRdkGponManager_middle_layer_src.la
 
 libRdkGponManager_middle_layer_src_la_CPPFLAGS = -I$(top_srcdir)/source/TR-181/middle_layer_src \
+                                                 -I$(top_srcdir)/source/TR-181/rbus \
                                                  -I$(top_srcdir)/source/TR-181/include \
                                                  -I$(top_srcdir)/source/GponManager
 
