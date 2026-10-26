@@ -6,6 +6,7 @@ AM_CPPFLAGS = $(RBUS_CFLAGS) \
     -I$(top_srcdir)/source/GponManager
 AM_CFLAGS = -std=gnu11
 
-libRdkGponManager_rbus_la_SOURCES = gponmgr_xpon_rbus.c gponmgr_xpon_rbus.h
-
-EXTRA_DIST = gponmgr_xpon_params.def
+libRdkGponManager_rbus_la_SOURCES = gponmgr_xpon_rbus.c \
+    gponmgr_xpon_rbus.h \
+    tr181/gponmgr_xpon_tr181.c \
+    tr181/gponmgr_xpon_tr181.h
