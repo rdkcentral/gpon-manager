@@ -17,4 +17,4 @@
 # limitations under the License.
 ##########################################################################
 
-SUBDIRS = TR-181 GponManager
+SUBDIRS = telemetry TR-181 GponManager

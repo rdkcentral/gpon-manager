@@ -1,0 +1,69 @@
+# Build outputs
+*.o
+*.a
+*.so
+*.so.*
+*.la
+*.lo
+*.obj
+.libs/
+.deps/
+.dirstamp
+
+# Autotools / libtool generated files (top level)
+/aclocal.m4
+/autom4te.cache/
+/configure
+/configure~
+/config.log
+/config.status
+/libtool
+/stamp-h1
+
+# Autotools aux/macro files generated into cfg/ (cfg/Makefile.am is tracked)
+/cfg/ar-lib
+/cfg/compile
+/cfg/config.guess
+/cfg/config.h
+/cfg/config.h.in
+/cfg/config.h.in~
+/cfg/config.sub
+/cfg/depcomp
+/cfg/install-sh
+/cfg/libtool.m4
+/cfg/ltmain.sh
+/cfg/ltoptions.m4
+/cfg/ltsugar.m4
+/cfg/ltversion.m4
+/cfg/lt~obsolete.m4
+/cfg/missing
+/cfg/stamp-h1
+/cfg/test-driver
+/m4/
+
+# Generated makefiles (only Makefile.am is tracked)
+Makefile
+Makefile.in
+
+# Generated sources and binaries
+/source/GponManager/dm_pack_datamodel.c
+/output.XML
+/source/GponManager/GponManager
+
+# Yocto / host session leftovers
+.lastlogin
+.bash_history
+
+# Logs, core dumps and patch leftovers
+*.log
+core.*
+*.orig
+*.rej
+*.bak
+
+# Editors / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

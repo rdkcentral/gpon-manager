@@ -33,6 +33,7 @@
 #include "gponmgr_dml_hal.h"
 #include "gponmgr_dml_hal_param.h"
 #include "gponmgr_link_state_machine.h"
+#include "gponmgr_telemetry.h"
 
 #define HAL_CONNECTION_RETRY_MAX_COUNT 10
 
@@ -111,12 +112,14 @@ ANSC_STATUS GponHal_Init()
     if (json_hal_client_init(GPON_MANAGER_CONF_FILE) != RETURN_OK)
     {
         CcspTraceError(("%s - %d Failed to initialise json hal client library \n", __FUNCTION__, __LINE__));
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_CALL_FAILED);
         return ANSC_STATUS_FAILURE;
     }
 
     if (json_hal_client_run() != RETURN_OK)
     {
         CcspTraceError(("%s - %d Failed to start the json hal client module \n", __FUNCTION__, __LINE__));
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_CALL_FAILED);
         return ANSC_STATUS_FAILURE;
     }
 
@@ -145,6 +148,7 @@ ANSC_STATUS GponHal_Init()
     if (is_client_connected != TRUE)
     {
         CcspTraceError(("Failed to connect to the hal server\n"));
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_CALL_FAILED);
         return ANSC_STATUS_FAILURE;
     }
     return ANSC_STATUS_SUCCESS;
@@ -264,6 +268,7 @@ ANSC_STATUS GponHal_setParam(char *pName, eParamType pType, char *pValue)
     if (json_hal_client_send_and_get_reply(jrequest, &jreply_msg) == RETURN_ERR)
     {
         fprintf(stderr,"%s - %d Failed to get reply for the json request \n", __FUNCTION__, __LINE__);
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_CALL_FAILED);
         FREE_JSON_OBJECT(jrequest);
         FREE_JSON_OBJECT(jreply_msg);
         return rc;
@@ -295,6 +300,11 @@ ANSC_STATUS GponHal_setParam(char *pName, eParamType pType, char *pValue)
     {
         json_object_put(jreply_msg);
         jreply_msg = NULL;
+    }
+
+    if (rc != ANSC_STATUS_SUCCESS)
+    {
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_CALL_FAILED);
     }
     return rc;
 }
@@ -531,6 +541,7 @@ void eventcb_PhysicalMediaStatus(const char *msg, const int len)
     else
     {
         CcspTraceError(("%s %d - Failed to extract event parameters from message for Physical Media status\n", __FUNCTION__, __LINE__));
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_EVENT_PARSE_FAILED);
     }
 
 }
@@ -564,6 +575,7 @@ void eventcb_PhysicalMediaAlarmsAll(const char *msg, const int len)
     else
     {
         CcspTraceError(("%s %d - Failed to extract event parameters from message for Physical Media Alarms Event\n", __FUNCTION__, __LINE__));
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_EVENT_PARSE_FAILED);
     }
 }
 
@@ -619,6 +631,7 @@ void eventcb_VeipAdministrativeState(const char *msg, const int len)
     else
     {
         CcspTraceError(("%s %d - Failed to extract event parameters from message for Veip Administrative state\n", __FUNCTION__, __LINE__));
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_EVENT_PARSE_FAILED);
     }
 }
 
@@ -679,6 +692,7 @@ void eventcb_VeipOperationalState(const char *msg, const int len)
     else
     {
        CcspTraceError(("%s %d - Failed to extract event parameters from message for Veip operational state\n", __FUNCTION__, __LINE__));
+       xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_EVENT_PARSE_FAILED);
     }
 }
 void eventcb_PloamRegistrationState (const char *msg, const int len)
@@ -710,6 +724,7 @@ void eventcb_PloamRegistrationState (const char *msg, const int len)
     else
     {
        CcspTraceError(("%s %d - Failed to extract event parameters from message for Ploam Registration state\n", __FUNCTION__, __LINE__));
+       xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_EVENT_PARSE_FAILED);
     }
 }
 
@@ -1293,6 +1308,20 @@ ANSC_STATUS GponHal_get_data(void)
         GponMgrDml_GetData_release(pGponDmlData);
     }
 
+    /* Raise once per failure streak: get_data is polled and retried in a tight loop during init. */
+    static bool stats_failure_reported = FALSE;
+    if (retStatus != ANSC_STATUS_SUCCESS)
+    {
+        if (!stats_failure_reported)
+        {
+            stats_failure_reported = TRUE;
+            xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_STATS_COLLECTION_FAILED);
+        }
+    }
+    else
+    {
+        stats_failure_reported = FALSE;
+    }
 
     return retStatus;
 }

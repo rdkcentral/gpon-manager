@@ -46,6 +46,7 @@ _GPON_LINK_SM_CTRL_
     bool                        sm_running;
     GPON_LINK_STATE_MACHINE_T   sm_state;
     GPON_DML_DATA*              pGponData;
+    bool                        publish_failure_reported;
 }
 GPON_LINK_SM_CTRL_T;
 

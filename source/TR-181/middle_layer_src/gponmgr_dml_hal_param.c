@@ -29,6 +29,7 @@
 
 #include "gpon_apis.h"
 #include "gponmgr_dml_hal_param.h"
+#include "gponmgr_telemetry.h"
 
 
 
@@ -252,6 +253,19 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
         {
             pPhyMedia->PonMode = NGPON2;
             retStatus = ANSC_STATUS_SUCCESS;
+        }
+
+        /* All ITU-T PON modes are valid; only an IEEE EPON module is a wrong PON mode.
+         * Reported once until a valid mode is seen again. */
+        static bool wrong_pon_mode_reported = false;
+        if(retStatus == ANSC_STATUS_SUCCESS)
+        {
+            wrong_pon_mode_reported = false;
+        }
+        else if(strstr(pValue, "EPON") != NULL && !wrong_pon_mode_reported)
+        {
+            wrong_pon_mode_reported = true;
+            xponMgr_telemetry_raise_simple(XPON_TELEM_SYSTEM_HAL_WRONG_PON_MODE);
         }
     }
     else if( strstr(ParamName, "Connector"))
@@ -479,7 +493,12 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     }
     else
     {
+        DML_ALARM prevAlarm = pPhyMedia->Alarm;
         retStatus = Map_hal_dml_alarm(&(pPhyMedia->Alarm), ParamName, pValue);        
+        if(retStatus == ANSC_STATUS_SUCCESS)
+        {
+            xponMgr_telemetry_raise_alarms(&prevAlarm, &(pPhyMedia->Alarm), (ULONG)hal_index);
+        }
     }
     
     if(retStatus == ANSC_STATUS_SUCCESS)
@@ -601,6 +620,8 @@ ANSC_STATUS Map_hal_dml_ploam(DML_PLOAM* gponPloam, char* ParamName, char* pValu
     }    
     else if( strstr(ParamName, "RegistrationState"))
     {
+        REG_STATE_ENUM prevRegState = gponPloam->RegistrationState;
+
         //O1(0),O2(1),O3(2),O4(3),O5(4),O6(5),O7(6),O8(7),O9(8)
         if(strstr(pValue,"O1"))
         {
@@ -646,6 +667,11 @@ ANSC_STATUS Map_hal_dml_ploam(DML_PLOAM* gponPloam, char* ParamName, char* pValu
         {
             gponPloam->RegistrationState = O9;
             retStatus = ANSC_STATUS_SUCCESS;
+        }
+
+        if(retStatus == ANSC_STATUS_SUCCESS)
+        {
+            xponMgr_telemetry_raise_onu_state(prevRegState, gponPloam->RegistrationState);
         }
     }
     else if( strstr(ParamName, "RegistrationTimers"))

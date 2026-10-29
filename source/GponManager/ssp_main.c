@@ -58,6 +58,7 @@
 #include "ssp_global.h"
 #include "stdlib.h"
 #include "ccsp_dm_api.h"
+#include "gponmgr_telemetry.h"
 
 #define DEBUG_INI_NAME "/etc/debug.ini"
 
@@ -295,6 +296,8 @@ int main(int argc, char* argv[])
     signal(SIGALRM, sig_handler);
 #endif /*  INCLUDE_BREAKPAD */
 
+    xponMgr_telemetry_init("GponManager");
+
     cmd_dispatch('e');
 #ifdef _COSA_SIM_
     subSys = "";        /* PC simu use empty string as subsystem */
@@ -305,6 +308,8 @@ int main(int argc, char* argv[])
     if (err != CCSP_SUCCESS)
     {
         fprintf(stderr, "Cdm_Init: %s\n", Cdm_StrError(err));
+        xponMgr_telemetry_raise_simple(XPON_TELEM_SYSTEM_INIT_FAILURE);
+        xponMgr_telemetry_cleanup();
         exit(1);
     }
 
@@ -335,6 +340,8 @@ int main(int argc, char* argv[])
         }
     }
 
+    xponMgr_telemetry_raise_simple(XPON_TELEM_SYSTEM_SHUTDOWN);
+
     err = Cdm_Term();
     if (err != CCSP_SUCCESS)
     {
@@ -343,6 +350,8 @@ int main(int argc, char* argv[])
     }
 
     ssp_cancel();
+
+    xponMgr_telemetry_cleanup();
 
     return 0;
 }

@@ -92,6 +92,28 @@ LIBS="$saved_LIBS"
 AC_SUBST(RBUS_CFLAGS)
 AC_SUBST(RBUS_LIBS)
 
+dnl Option to enable/disable RDK Telemetry 2.0 support
+AC_ARG_ENABLE([telemetry2-0],
+    AS_HELP_STRING([--enable-telemetry2-0], [Enable RDK Telemetry 2.0 support (default=no)]),
+    [enable_telemetry2_0=$enableval],
+    [enable_telemetry2_0=no])
+
+T2_LIBS=""
+T2_CFLAGS=""
+if test "x$enable_telemetry2_0" = "xyes"; then
+    AC_CHECK_LIB([telemetry_msgsender], [t2_event_s], [
+        T2_LIBS="-ltelemetry_msgsender"
+    ], [
+        AC_MSG_ERROR([libtelemetry_msgsender is required for Telemetry 2.0])
+    ])
+    AC_DEFINE([ENABLE_FEATURE_TELEMETRY2_0], [1],
+              [Define to 1 to enable RDK Telemetry 2.0 support])
+    dnl Sources do not include cfg/config.h, so also pass the define on the command line.
+    T2_CFLAGS="-DENABLE_FEATURE_TELEMETRY2_0"
+fi
+AC_SUBST([T2_LIBS])
+AC_SUBST([T2_CFLAGS])
+
 dnl Checks for header files.
 AC_CHECK_HEADERS([limits.h memory.h stdlib.h string.h sys/socket.h unistd.h])
 
@@ -108,5 +130,6 @@ AC_CONFIG_FILES([Makefile
                 source/TR-181/Makefile
                 source/TR-181/middle_layer_src/Makefile
                 source/TR-181/rbus/Makefile
+                source/telemetry/Makefile
                 source/GponManager/Makefile])
 AC_OUTPUT

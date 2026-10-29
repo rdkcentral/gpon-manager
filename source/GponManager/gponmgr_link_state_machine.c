@@ -21,13 +21,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <pthread.h>
 #include "gponmgr_dml_data.h"
 #include "gponmgr_dml_hal.h"
 #include "gponmgr_link_state_machine.h"
 #include "gponmgr_dml_eth_iface.h"
+#include "gponmgr_telemetry.h"
 
 
 #define GPON_LINK_SM_LOOP_TIMEOUT 500000 // timeout in milliseconds. This is the state machine loop interval
+
+/* Number of VEIP state machines currently in GSM_LINK_UP; drives XPON_PHY_STATUS_UP/DOWN. */
+static int g_veip_links_up = 0;
+static pthread_mutex_t g_veip_links_up_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 ///////////////////////////////////////////////////
@@ -41,8 +47,60 @@ ANSC_STATUS gpon_controller_init(GPON_LINK_SM_CTRL_T* gpon_sm_ctrl)
     gpon_sm_ctrl->sm_running = FALSE;
     gpon_sm_ctrl->sm_state = GSM_LINK_DOWN;
     gpon_sm_ctrl->pGponData = NULL;
+    gpon_sm_ctrl->publish_failure_reported = FALSE;
 
     return ANSC_STATUS_SUCCESS;
+}
+
+static const char* gpon_sm_veip_ifname(GPON_LINK_SM_CTRL_T* gpon_sm_ctrl)
+{
+    if(gpon_sm_ctrl->pGponData != NULL && gpon_sm_ctrl->veip_hal_index > 0)
+    {
+        DML_VEIP_CTRL_T* pGponVeipData = gpon_sm_ctrl->pGponData->gpon.Veip.pdata[gpon_sm_ctrl->veip_hal_index - 1];
+        if(pGponVeipData != NULL)
+        {
+            return pGponVeipData->dml.InterfaceName;
+        }
+    }
+    return NULL;
+}
+
+static void gpon_sm_telemetry_link_change(GPON_LINK_SM_CTRL_T* gpon_sm_ctrl, bool link_up)
+{
+    bool phy_changed = false;
+
+    xponMgr_telemetry_raise_intf(link_up ? XPON_TELEM_INTF_LINK_UP : XPON_TELEM_INTF_LINK_DOWN,
+                                 gpon_sm_veip_ifname(gpon_sm_ctrl));
+
+    pthread_mutex_lock(&g_veip_links_up_mutex);
+    if(link_up)
+    {
+        phy_changed = (g_veip_links_up++ == 0);
+    }
+    else if(g_veip_links_up > 0)
+    {
+        phy_changed = (--g_veip_links_up == 0);
+    }
+    pthread_mutex_unlock(&g_veip_links_up_mutex);
+
+    if(phy_changed)
+    {
+        xponMgr_telemetry_raise_simple(link_up ? XPON_TELEM_PHY_STATUS_UP : XPON_TELEM_PHY_STATUS_DOWN);
+    }
+}
+
+/* The SM retries a failed publish every loop, so report once per failure streak. */
+static void gpon_sm_telemetry_publish_result(GPON_LINK_SM_CTRL_T* gpon_sm_ctrl, ANSC_STATUS ret)
+{
+    if(ret == ANSC_STATUS_SUCCESS)
+    {
+        gpon_sm_ctrl->publish_failure_reported = FALSE;
+    }
+    else if(!gpon_sm_ctrl->publish_failure_reported)
+    {
+        gpon_sm_ctrl->publish_failure_reported = TRUE;
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_RBUS_PUBLISH_FAILED);
+    }
 }
 
 bool check_gpon_physical_media_alarm_los(GPON_LINK_SM_CTRL_T* gpon_sm_ctrl)
@@ -154,6 +212,7 @@ ANSC_STATUS gpon_config_veip_interface(GPON_LINK_SM_CTRL_T* gpon_sm_ctrl)
             //Enable GW interface 
             Gponmgr_eth_setEnableInterface(gpon_sm_ctrl->veip_eth_instance, TRUE);
 #endif
+            gpon_sm_telemetry_publish_result(gpon_sm_ctrl, ret);
 
         }
     }
@@ -175,6 +234,7 @@ ANSC_STATUS gpon_disable_veip_interface(GPON_LINK_SM_CTRL_T* gpon_sm_ctrl)
 #else
         ret = Gponmgr_eth_setEnableInterface(gpon_sm_ctrl->veip_eth_instance, FALSE);
 #endif
+        gpon_sm_telemetry_publish_result(gpon_sm_ctrl, ret);
     }
 
     return ret;
@@ -204,6 +264,7 @@ GPON_LINK_STATE_MACHINE_T gpon_sm_transition_LinkDown_to_LinkUp(GPON_LINK_SM_CTR
     if(ret == ANSC_STATUS_SUCCESS)
     {
         CcspTraceInfo(("%s %d - TRANSITION Link to Up\n", __FUNCTION__, __LINE__));
+        gpon_sm_telemetry_link_change(gpon_sm_ctrl, true);
         return GSM_LINK_UP;
     }
 
@@ -220,6 +281,7 @@ GPON_LINK_STATE_MACHINE_T gpon_sm_transition_LinkUp_to_LinkDown(GPON_LINK_SM_CTR
     if(ret == ANSC_STATUS_SUCCESS)
     {
         CcspTraceInfo(("%s %d - TRANSITION Link to Down\n", __FUNCTION__, __LINE__));
+        gpon_sm_telemetry_link_change(gpon_sm_ctrl, false);
         return GSM_LINK_DOWN;
     }
 
@@ -434,6 +496,7 @@ ANSC_STATUS GponMgr_Link_StateMachine_Start(DML_VEIP* pGponVeip)
     if(gpon_sm_ctrl == NULL)
     {
         CcspTraceError(("%s %d Error: Failed to allocate memory\n", __FUNCTION__, __LINE__ ));
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_STATE_MACHINE_START_FAILED);
         return ANSC_STATUS_FAILURE;
     }
 
@@ -445,6 +508,7 @@ ANSC_STATUS GponMgr_Link_StateMachine_Start(DML_VEIP* pGponVeip)
     if( 0 != iErrorCode )
     {
         CcspTraceError(("%s %d Error: Failed to start State Machine Thread error code: %d\n", __FUNCTION__, __LINE__, iErrorCode ));
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_STATE_MACHINE_START_FAILED);
     }
 
     return returnStatus;

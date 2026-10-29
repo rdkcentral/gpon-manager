@@ -42,6 +42,7 @@
 #include "gponmgr_dml_data.h"
 #include "gponmgr_dml_internal.h"
 #include "gponmgr_xpon_rbus.h"
+#include "gponmgr_telemetry.h"
 
 extern void * g_pDslhDmlAgent;
 
@@ -125,6 +126,7 @@ ANSC_STATUS GponMgrDml_Initialize ( ANSC_HANDLE hThisObject )
     returnStatus = GponMgrDml_DataInit();
     if(returnStatus != ANSC_STATUS_SUCCESS)
     {
+        xponMgr_telemetry_raise_simple(XPON_TELEM_SYSTEM_INIT_FAILURE);
         return returnStatus;
     }
 
@@ -132,6 +134,7 @@ ANSC_STATUS GponMgrDml_Initialize ( ANSC_HANDLE hThisObject )
     returnStatus = GponHal_Init();
     if(returnStatus != ANSC_STATUS_SUCCESS)
     {
+        xponMgr_telemetry_raise_simple(XPON_TELEM_SYSTEM_INIT_FAILURE);
         return returnStatus;
     }
 
@@ -139,6 +142,7 @@ ANSC_STATUS GponMgrDml_Initialize ( ANSC_HANDLE hThisObject )
     returnStatus = GponHal_get_init_data();
     if(returnStatus != ANSC_STATUS_SUCCESS)
     {
+        xponMgr_telemetry_raise_simple(XPON_TELEM_SYSTEM_INIT_FAILURE);
         return returnStatus;
     }
 
@@ -146,13 +150,17 @@ ANSC_STATUS GponMgrDml_Initialize ( ANSC_HANDLE hThisObject )
     returnStatus = GponMgr_InternalControlInit();
     if(returnStatus != ANSC_STATUS_SUCCESS)
     {
+        xponMgr_telemetry_raise_simple(XPON_TELEM_SYSTEM_INIT_FAILURE);
         return returnStatus;
     }
 
     if (GponMgrXponRbus_Init() != 0)
     {
         CcspTraceError(("XPON RBUS initialization failed; legacy Device.X_RDK_ONT remains available\n"));
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_RBUS_REGISTER_FAILED);
     }
+
+    xponMgr_telemetry_raise_simple(XPON_TELEM_SYSTEM_INIT_SUCCESS);
 
     return returnStatus;
 }

@@ -20,6 +20,7 @@
 #include "gponmgr_controller.h"
 #include "gponmgr_link_state_machine.h"
 #include "gponmgr_dml_hal.h"
+#include "gponmgr_telemetry.h"
 
 
 
@@ -97,6 +98,11 @@ ANSC_STATUS GponMgr_subscribe_hal_events(void)
 
 
         GponMgrDml_GetData_release(pGponDmlData);
+    }
+
+    if (ret != ANSC_STATUS_SUCCESS)
+    {
+        xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_EVENT_SUBSCRIBE_FAILED);
     }
 
     return ret;
