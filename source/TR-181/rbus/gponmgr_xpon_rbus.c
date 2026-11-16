@@ -1,10 +1,16 @@
+/**
+ * @file gponmgr_xpon_rbus.c
+ * @brief Owns the RBUS handle for the Device.XPON provider.
+ */
+
 #include "gponmgr_xpon_rbus.h"
 #include "tr181/gponmgr_xpon_tr181.h"
 #include <pthread.h>
 
-static pthread_mutex_t g_lifecycleMutex = PTHREAD_MUTEX_INITIALIZER;
-static rbusHandle_t g_handle;
+static pthread_mutex_t g_lifecycleMutex = PTHREAD_MUTEX_INITIALIZER;   /* Serializes Init/Close. */
+static rbusHandle_t g_handle;                                          /* NULL when closed. */
 
+/** @brief See gponmgr_xpon_rbus.h. */
 int GponMgrXponRbus_Init(void)
 {
     rbusError_t result;
@@ -34,6 +40,7 @@ int GponMgrXponRbus_Init(void)
     return result;
 }
 
+/** @brief See gponmgr_xpon_rbus.h. */
 void GponMgrXponRbus_Close(void)
 {
     pthread_mutex_lock(&g_lifecycleMutex);

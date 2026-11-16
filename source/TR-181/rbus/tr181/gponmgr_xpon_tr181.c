@@ -1,3 +1,8 @@
+/**
+ * @file gponmgr_xpon_tr181.c
+ * @brief BBF TR-181 Device.XPON RBUS provider backed by GPON_DML_DATA.
+ */
+
 #include "gponmgr_xpon_tr181.h"
 #include "gponmgr_dml_data.h"
 #include "gponmgr_dml_hal.h"
@@ -11,6 +16,7 @@
 #include <string.h>
 #include <time.h>
 
+/** @brief HAL data source refreshed before a get. */
 typedef enum
 {
     XPON_NONE, XPON_PHY,
@@ -18,24 +24,26 @@ typedef enum
     XPON_SOURCE_COUNT
 } XponSource;
 
+/** @brief State of one in-progress get request. */
 typedef struct
 {
-    const char *name;
-    const char *parameter;
-    uint32_t instances[3];
-    GPON_DML_DATA *data;
-    rbusProperty_t property;
-    rbusValue_t value;
+    const char *name;           /**< Full parameter name. */
+    const char *parameter;      /**< Last name segment. */
+    uint32_t instances[3];      /**< Instance numbers parsed from the name. */
+    GPON_DML_DATA *data;        /**< Locked DML data. */
+    rbusProperty_t property;    /**< Property to fill. */
+    rbusValue_t value;          /**< Value being built. */
 } XponRequest;
 
+/* ONU.1 + ANI.1 + one row per PhysicalMedia, GEM and VEIP entry. */
 #define XPON_MAX_ROWS (2 + GPON_DATA_MAX_PM + GPON_DATA_MAX_GEM + GPON_DATA_MAX_VEIP)
 #define XPON_ANI "Device.XPON.ONU.1.ANI.1."
 
-static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;     /* Guards all state below. */
 static rbusHandle_t g_handle;
-static bool g_ready;
-static time_t g_fetched[XPON_SOURCE_COUNT];
-static char g_rows[XPON_MAX_ROWS][RBUS_MAX_NAME_LENGTH];
+static bool g_ready;                                            /* Set once registration succeeds. */
+static time_t g_fetched[XPON_SOURCE_COUNT];                     /* Last HAL refresh time (s) per source. */
+static char g_rows[XPON_MAX_ROWS][RBUS_MAX_NAME_LENGTH];        /* Currently registered table rows. */
 static size_t g_rowCount;
 
 static rbusError_t xpon_base_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
@@ -57,6 +65,7 @@ static rbusError_t xpon_add(rbusHandle_t handle, const char *name, const char *a
 static rbusError_t xpon_remove(rbusHandle_t handle, const char *name);
 static rbusError_t xpon_subscribe(rbusHandle_t handle, rbusEventSubAction_t action, const char *name, rbusFilter_t filter, int32_t interval, bool *autoPublish);
 
+/* Full BBF 2.21 Device.XPON tree; unsupported entries use xpon_unsupported_*_handler. */
 static rbusDataElement_t g_elements[] = {
     {"Device.XPON.ONU.{i}.", RBUS_ELEMENT_TYPE_TABLE, {NULL, NULL, xpon_add, xpon_remove, NULL, NULL}},
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.", RBUS_ELEMENT_TYPE_TABLE, {NULL, NULL, xpon_add, xpon_remove, NULL, NULL}},
@@ -223,18 +232,33 @@ static rbusDataElement_t g_elements[] = {
 
 static const size_t g_elementCount = sizeof(g_elements) / sizeof(g_elements[0]);
 
+/**
+ * @brief Log a warning for a BBF parameter with no HAL mapping.
+ * @param name   Full parameter name, used in the log line.
+ * @param reason Short reason appended to the log line.
+ * @return Always RBUS_ERROR_INVALID_OPERATION.
+ */
 static rbusError_t xpon_unsupported(const char *name, const char *reason)
 {
     CcspTraceWarning(("XPON: BBF TR-181 %s not supported yet (%s)\n", name, reason));
     return RBUS_ERROR_INVALID_OPERATION;
 }
 
+/**
+ * @brief Match a concrete parameter name against a registered "{i}" pattern.
+ * @param pattern   Registered element name, e.g. "Device.XPON.ONU.{i}.Enable".
+ * @param name      Requested parameter name, e.g. "Device.XPON.ONU.1.Enable".
+ * @param[out] instances Instance numbers in pattern order; unused slots are 0.
+ * @return true if every character matches and each instance is 1..UINT32_MAX
+ *         with no leading zero; false otherwise.
+ */
 static bool xpon_match(const char *pattern, const char *name, uint32_t instances[3])
 {
     size_t count = 0;
     memset(instances, 0, 3 * sizeof(*instances));
     while (*pattern)
     {
+        /* Parse a decimal instance; no leading zero, no overflow. */
         if (strncmp(pattern, "{i}", 3) == 0)
         {
             uint64_t number = 0;
@@ -255,18 +279,36 @@ static bool xpon_match(const char *pattern, const char *name, uint32_t instances
     return *name == '\0';
 }
 
+/**
+ * @brief Find the registered property element matching a parameter name.
+ * @param name           Requested parameter name; NULL or too long never matches.
+ * @param[out] instances Instance numbers parsed from @p name.
+ * @return Pointer into g_elements, or NULL if no property element matches.
+ */
 static const rbusDataElement_t *xpon_find(const char *name, uint32_t instances[3])
 {
     size_t index;
     if (!name || strlen(name) >= RBUS_MAX_NAME_LENGTH)
         return NULL;
     for (index = 0; index < g_elementCount; ++index)
+        /* Tables are excluded; RBUS resolves rows itself. */
         if (g_elements[index].type == RBUS_ELEMENT_TYPE_PROPERTY &&
             xpon_match(g_elements[index].name, name, instances))
             return &g_elements[index];
     return NULL;
 }
 
+/**
+ * @brief Re-read one data source from the HAL into the DML cache.
+ *
+ * Each source is refreshed at most once per monotonic second.
+ *
+ * @param data   DML data; caller holds the DML lock and g_mutex.
+ * @param source Source to refresh; XPON_NONE is a no-op.
+ * @retval RBUS_ERROR_SUCCESS                     Data is fresh.
+ * @retval RBUS_ERROR_BUS_ERROR                   clock_gettime() failed.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE HAL call failed.
+ */
 static rbusError_t xpon_refresh(GPON_DML_DATA *data, XponSource source)
 {
     struct timespec now;
@@ -275,6 +317,7 @@ static rbusError_t xpon_refresh(GPON_DML_DATA *data, XponSource source)
         return RBUS_ERROR_SUCCESS;
     if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
         return RBUS_ERROR_BUS_ERROR;
+    /* Already refreshed in this second. */
     if (g_fetched[source] != 0 && now.tv_sec == g_fetched[source])
         return RBUS_ERROR_SUCCESS;
     switch (source)
@@ -296,6 +339,12 @@ static rbusError_t xpon_refresh(GPON_DML_DATA *data, XponSource source)
     return RBUS_ERROR_SUCCESS;
 }
 
+/**
+ * @brief Find a PhysicalMedia row by its instance number.
+ * @param data     Locked DML data.
+ * @param instance TR-181 instance number (uInstanceNumber).
+ * @return Pointer to the DML_PHY_MEDIA row, or NULL if no populated slot (of GPON_DATA_MAX_PM) matches.
+ */
 static DML_PHY_MEDIA *xpon_phy(GPON_DML_DATA *data, uint32_t instance)
 {
     size_t index;
@@ -306,6 +355,12 @@ static DML_PHY_MEDIA *xpon_phy(GPON_DML_DATA *data, uint32_t instance)
     return NULL;
 }
 
+/**
+ * @brief Find a Gem row by its instance number.
+ * @param data     Locked DML data.
+ * @param instance TR-181 instance number (uInstanceNumber).
+ * @return Pointer to the DML_GEM row, or NULL if no populated slot (of GPON_DATA_MAX_GEM) matches.
+ */
 static DML_GEM *xpon_gem(GPON_DML_DATA *data, uint32_t instance)
 {
     size_t index;
@@ -315,6 +370,12 @@ static DML_GEM *xpon_gem(GPON_DML_DATA *data, uint32_t instance)
     return NULL;
 }
 
+/**
+ * @brief Find a Veip row by its instance number.
+ * @param data     Locked DML data.
+ * @param instance TR-181 instance number (uInstanceNumber).
+ * @return Pointer to the DML_VEIP row, or NULL if no populated slot (of GPON_DATA_MAX_VEIP) matches.
+ */
 static DML_VEIP *xpon_veip(GPON_DML_DATA *data, uint32_t instance)
 {
     size_t index;
@@ -324,6 +385,12 @@ static DML_VEIP *xpon_veip(GPON_DML_DATA *data, uint32_t instance)
     return NULL;
 }
 
+/**
+ * @brief Pick the PhysicalMedia row that backs ANI-level parameters.
+ * @param data Locked DML data.
+ * @return The only populated row; else the only row with RedundancyState Active;
+ *         NULL if there are no rows or the choice is ambiguous.
+ */
 static DML_PHY_MEDIA *xpon_active_phy(GPON_DML_DATA *data)
 {
     DML_PHY_MEDIA *only = NULL, *active = NULL;
@@ -340,9 +407,17 @@ static DML_PHY_MEDIA *xpon_active_phy(GPON_DML_DATA *data)
             ++activeCount;
         }
     }
+    /* Single row wins; else exactly one Active row is required. */
     return count == 1 ? only : activeCount == 1 ? active : NULL;
 }
 
+/**
+ * @brief Complete a get started by xpon_begin_get() and release its locks.
+ * @param request Request returned by xpon_begin_get().
+ * @param result  Outcome of the get; the value is copied to the property only on success.
+ * @return @p result unchanged.
+ * @note Releases the request value, the DML lock and g_mutex.
+ */
 static rbusError_t xpon_finish_get(XponRequest *request, rbusError_t result)
 {
     if (result == RBUS_ERROR_SUCCESS)
@@ -354,6 +429,22 @@ static rbusError_t xpon_finish_get(XponRequest *request, rbusError_t result)
     return result;
 }
 
+/**
+ * @brief Validate a get request, take the locks and refresh the needed HAL data.
+ *
+ * Also refreshes and checks the row for EthernetUNI, Transceiver and GEM Port names.
+ *
+ * @param property     Property being read.
+ * @param source       Primary data source to refresh.
+ * @param[out] request Parsed request; zeroed first.
+ * @retval RBUS_ERROR_SUCCESS               g_mutex and the DML lock are held; call xpon_finish_get().
+ * @retval RBUS_ERROR_INVALID_INPUT         @p property is NULL.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST Unknown name, instance other than 1, or missing row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED       Provider or DML data not ready.
+ * @retval RBUS_ERROR_OUT_OF_RESOURCES      rbusValue_Init() failed.
+ * @retval other                            xpon_refresh() error.
+ * @note On any error no lock is held.
+ */
 static rbusError_t xpon_begin_get(rbusProperty_t property, XponSource source, XponRequest *request)
 {
     rbusError_t result;
@@ -364,6 +455,7 @@ static rbusError_t xpon_begin_get(rbusProperty_t property, XponSource source, Xp
     request->name = rbusProperty_GetName(property);
     if (!xpon_find(request->name, request->instances))
         return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
+    /* Only ONU.1 and ANI.1 exist. */
     if ((request->instances[0] && request->instances[0] != 1) ||
         (strstr(request->name, ".ANI.") && request->instances[1] != 1))
         return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
@@ -383,6 +475,7 @@ static rbusError_t xpon_begin_get(rbusProperty_t property, XponSource source, Xp
         return RBUS_ERROR_NOT_INITIALIZED;
     }
 
+    /* Refresh the source; table parameters also need their row to exist. */
     result = xpon_refresh(request->data, source);
     if (result == RBUS_ERROR_SUCCESS && strstr(request->name, ".EthernetUNI."))
     {
@@ -405,10 +498,17 @@ static rbusError_t xpon_begin_get(rbusProperty_t property, XponSource source, Xp
     if (result == RBUS_ERROR_SUCCESS && !rbusValue_Init(&request->value))
         result = RBUS_ERROR_OUT_OF_RESOURCES;
     if (result != RBUS_ERROR_SUCCESS)
-        return xpon_finish_get(request, result);
+        return xpon_finish_get(request, result);    /* Releases the locks taken above. */
     return RBUS_ERROR_SUCCESS;
 }
 
+/**
+ * @brief Set a uint32 value from a wider HAL counter.
+ * @param value  Value to set.
+ * @param number HAL value.
+ * @retval RBUS_ERROR_SUCCESS                         Value set.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION @p number exceeds UINT32_MAX.
+ */
 static rbusError_t xpon_uint32(rbusValue_t value, uint64_t number)
 {
     if (number > UINT32_MAX)
@@ -417,6 +517,15 @@ static rbusError_t xpon_uint32(rbusValue_t value, uint64_t number)
     return RBUS_ERROR_SUCCESS;
 }
 
+/**
+ * @brief Set a string value after checking termination and the BBF max length.
+ * @param value     Value to set.
+ * @param text      HAL source buffer.
+ * @param capacity  Size of @p text in bytes.
+ * @param maxLength BBF maximum string length.
+ * @retval RBUS_ERROR_SUCCESS                         Value set.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION Unterminated or longer than @p maxLength.
+ */
 static rbusError_t xpon_string(rbusValue_t value, const char *text, size_t capacity, size_t maxLength)
 {
     size_t length = strnlen(text, capacity);
@@ -426,6 +535,15 @@ static rbusError_t xpon_string(rbusValue_t value, const char *text, size_t capac
     return RBUS_ERROR_SUCCESS;
 }
 
+/**
+ * @brief Set a string value from a HAL enum index.
+ * @param value  Value to set.
+ * @param number HAL enum value, used as an index into @p names.
+ * @param names  BBF enumeration strings.
+ * @param count  Number of entries in @p names.
+ * @retval RBUS_ERROR_SUCCESS                         Value set to names[number].
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION @p number >= @p count.
+ */
 static rbusError_t xpon_enum(rbusValue_t value, unsigned int number,
                              const char *const *names, size_t count)
 {
@@ -435,6 +553,13 @@ static rbusError_t xpon_enum(rbusValue_t value, unsigned int number,
     return RBUS_ERROR_SUCCESS;
 }
 
+/**
+ * @brief Set a boolean value from a HAL alarm state.
+ * @param value Value to set.
+ * @param alarm HAL alarm state.
+ * @retval RBUS_ERROR_SUCCESS                         true for ACTIVE, false for INACTIVE.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION Any other alarm value.
+ */
 static rbusError_t xpon_alarm(rbusValue_t value, ALARM_ENUM alarm)
 {
     if (alarm != ACTIVE && alarm != INACTIVE)
@@ -443,6 +568,21 @@ static rbusError_t xpon_alarm(rbusValue_t value, ALARM_ENUM alarm)
     return RBUS_ERROR_SUCCESS;
 }
 
+/**
+ * @brief Get handler for ONU.{i}.ANI.{i}.Transceiver.{i}.* parameters.
+ *
+ * Reads the PhysicalMedia row; ID is its zero-based slot index.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION HAL value outside the BBF range.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Parameter has no HAL mapping.
+ */
 static rbusError_t xpon_transceiver_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -461,6 +601,7 @@ static rbusError_t xpon_transceiver_get_handler(rbusHandle_t handle, rbusPropert
 
     if (strcmp(request.parameter, "ID") == 0)
     {
+        /* ID is the zero-based slot index of this row. */
         result = RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
         for (index = 0; index < GPON_DATA_MAX_PM; ++index)
         {
@@ -491,6 +632,7 @@ static rbusError_t xpon_transceiver_get_handler(rbusHandle_t handle, rbusPropert
         rbusValue_SetInt32(request.value, media->TxPower.SignalLevel);
     else if (strcmp(request.parameter, "Temperature") == 0)
     {
+        /* Below absolute zero means bad HAL data. */
         if (media->Temperature.CurrentTemp < -274)
             result = RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION;
         else
@@ -512,6 +654,22 @@ static rbusError_t xpon_transceiver_get_handler(rbusHandle_t handle, rbusPropert
     return xpon_finish_get(&request, result);
 }
 
+/**
+ * @brief Get handler for ONU.{i}.ANI.{i}.* (Status, Alias, Enable, LastChange, TransceiverNumberOfEntries).
+ *
+ * Alias, Enable and LastChange need WAN_MANAGER_UNIFICATION_ENABLED.
+ * Status LowerLayerDown and an ambiguous active medium are reported as unsupported.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION HAL value outside the BBF range.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Parameter has no HAL mapping.
+ */
 static rbusError_t xpon_ani_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -534,6 +692,7 @@ static rbusError_t xpon_ani_get_handler(rbusHandle_t handle, rbusProperty_t prop
         rbusValue_SetUInt32(request.value, count);
         return xpon_finish_get(&request, RBUS_ERROR_SUCCESS);
     }
+    /* Remaining parameters come from the single active medium. */
     media = xpon_active_phy(request.data);
     if (!media)
         return xpon_finish_get(&request, xpon_unsupported(request.name, "no uniquely active physical medium"));
@@ -558,6 +717,21 @@ static rbusError_t xpon_ani_get_handler(rbusHandle_t handle, rbusProperty_t prop
     return xpon_finish_get(&request, result);
 }
 
+/**
+ * @brief Get handler for ONU.{i}.ANI.{i}.TC.PerformanceThresholds.*.
+ *
+ * Valid ranges: SignalFail 3-8; SignalDegrade 4-10 and greater than SignalFail.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION HAL value outside the BBF range.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Parameter has no HAL mapping.
+ */
 static rbusError_t xpon_threshold_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -582,6 +756,7 @@ static rbusError_t xpon_threshold_get_handler(rbusHandle_t handle, rbusProperty_
     }
     else if (strcmp(request.parameter, "SignalDegrade") == 0)
     {
+        /* BBF: SD must be 4-10 and greater than SF. */
         if (media->PerformThreshold.SignalDegrade < 4 || media->PerformThreshold.SignalDegrade > 10 ||
             media->PerformThreshold.SignalDegrade <= media->PerformThreshold.SignalFail)
             result = RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION;
@@ -593,6 +768,21 @@ static rbusError_t xpon_threshold_get_handler(rbusHandle_t handle, rbusProperty_
     return xpon_finish_get(&request, result);
 }
 
+/**
+ * @brief Get handler for ONU.{i}.ANI.{i}.TC.Alarms.* boolean alarms.
+ *
+ * Reads the alarm field of the active PhysicalMedia row.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION HAL value outside the BBF range.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Parameter has no HAL mapping.
+ */
 static rbusError_t xpon_alarm_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -642,6 +832,11 @@ static rbusError_t xpon_alarm_get_handler(rbusHandle_t handle, rbusProperty_t pr
     return xpon_finish_get(&request, xpon_alarm(request.value, alarm));
 }
 
+/**
+ * @brief Convert one hexadecimal character to its value.
+ * @param character Character to convert.
+ * @return 0-15, or -1 if @p character is not a hex digit.
+ */
 static int xpon_hex(unsigned char character)
 {
     if (character >= '0' && character <= '9') return character - '0';
@@ -650,10 +845,24 @@ static int xpon_hex(unsigned char character)
     return -1;
 }
 
+/**
+ * @brief Convert the PLOAM serial number to the 12-character BBF form.
+ *
+ * Accepts 16 hex digits (4 vendor ID bytes + 4-byte VSSN) or the canonical
+ * 4 printable ASCII characters + 8 hex digits.
+ *
+ * @param name  Parameter name, used for logging.
+ * @param ploam PLOAM data holding SerialNumber.
+ * @param value Value to set.
+ * @retval RBUS_ERROR_SUCCESS                         Value set, e.g. "ABCD1234ABCD".
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION Bad hex digit or non-printable vendor ID.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Length is neither 16 nor 12.
+ */
 static rbusError_t xpon_serial(const char *name, DML_PLOAM *ploam, rbusValue_t value)
 {
     char serial[13];
     size_t index, length = strnlen(ploam->SerialNumber, sizeof(ploam->SerialNumber));
+    /* 16 hex digits: first 4 bytes are the ASCII vendor ID. */
     if (length == 16)
     {
         for (index = 0; index < 4; ++index)
@@ -664,6 +873,7 @@ static rbusError_t xpon_serial(const char *name, DML_PLOAM *ploam, rbusValue_t v
                 return RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION;
             serial[index] = (char)(high * 16 + low);
         }
+        /* Last 8 hex digits are the VSSN, uppercased. */
         for (index = 0; index < 8; ++index)
         {
             if (xpon_hex((unsigned char)ploam->SerialNumber[index + 8]) < 0)
@@ -672,6 +882,7 @@ static rbusError_t xpon_serial(const char *name, DML_PLOAM *ploam, rbusValue_t v
         }
         serial[12] = '\0';
     }
+    /* Already canonical: validate in place. */
     else if (length == 12)
     {
         memcpy(serial, ploam->SerialNumber, sizeof(serial));
@@ -687,6 +898,20 @@ static rbusError_t xpon_serial(const char *name, DML_PLOAM *ploam, rbusValue_t v
     return xpon_string(value, serial, sizeof(serial), 12);
 }
 
+/**
+ * @brief Get handler for root and ONU-level NumberOfEntries parameters.
+ *
+ * ONU and ANI counts are fixed at 1; SoftwareImage is 0; EthernetUNI counts VEIP rows.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Parameter has no HAL mapping.
+ */
 static rbusError_t xpon_base_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -720,6 +945,18 @@ static rbusError_t xpon_base_get_handler(rbusHandle_t handle, rbusProperty_t pro
     return xpon_finish_get(&request, result);
 }
 
+/**
+ * @brief Get handler for ONU.{i}.ANI.{i}.TC.PM.PHY.* FEC/HEC counters and GEM.FrameHeaderHECErrors.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Parameter has no HAL mapping.
+ */
 static rbusError_t xpon_gtc_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -751,6 +988,21 @@ static rbusError_t xpon_gtc_get_handler(rbusHandle_t handle, rbusProperty_t prop
     return xpon_finish_get(&request, result);
 }
 
+/**
+ * @brief Get handler for ONU.{i}.ANI.{i}.TC.ONUActivation.* (ONUID, VendorID, SerialNumber, ONUState).
+ *
+ * Valid ranges: ONUID 0-1022; VendorID up to 4 characters; ONUState O1-O9.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION HAL value outside the BBF range.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Parameter has no HAL mapping.
+ */
 static rbusError_t xpon_activation_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -782,6 +1034,21 @@ static rbusError_t xpon_activation_get_handler(rbusHandle_t handle, rbusProperty
     return xpon_finish_get(&request, result);
 }
 
+/**
+ * @brief Get handler for ONU.{i}.ANI.{i}.TC.PM.PLOAM.* message and MIC error counters.
+ *
+ * MICErrors is rejected if it does not fit in uint32.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION HAL value outside the BBF range.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Parameter has no HAL mapping.
+ */
 static rbusError_t xpon_ploam_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -805,6 +1072,21 @@ static rbusError_t xpon_ploam_get_handler(rbusHandle_t handle, rbusProperty_t pr
     return xpon_finish_get(&request, result);
 }
 
+/**
+ * @brief Get handler for ONU.{i}.ANI.{i}.TC.PM.OMCI.* message and MIC error counters.
+ *
+ * MICErrors is rejected if it does not fit in uint32.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION HAL value outside the BBF range.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Parameter has no HAL mapping.
+ */
 static rbusError_t xpon_omci_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -828,6 +1110,19 @@ static rbusError_t xpon_omci_get_handler(rbusHandle_t handle, rbusProperty_t pro
     return xpon_finish_get(&request, result);
 }
 
+/**
+ * @brief Get handler for ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries.
+ *
+ * Counts the populated GEM slots.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ */
 static rbusError_t xpon_gem_count_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -847,6 +1142,21 @@ static rbusError_t xpon_gem_count_get_handler(rbusHandle_t handle, rbusProperty_
     return xpon_finish_get(&request, RBUS_ERROR_SUCCESS);
 }
 
+/**
+ * @brief Get handler for ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.* parameters.
+ *
+ * Valid ranges: PortID 0-65534; Direction only 'bidirectional'.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION HAL value outside the BBF range.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Parameter has no HAL mapping.
+ */
 static rbusError_t xpon_gem_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -882,6 +1192,21 @@ static rbusError_t xpon_gem_get_handler(rbusHandle_t handle, rbusProperty_t prop
     return xpon_finish_get(&request, result);
 }
 
+/**
+ * @brief Get handler for ONU.{i}.EthernetUNI.{i}.* parameters backed by VEIP rows.
+ *
+ * Name is up to 64 characters, InterdomainName up to 25; ANIs is always ANI.1.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                         Value set on @p property.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST           Unknown name, instance or row.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                  Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE     HAL read failed.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION HAL value outside the BBF range.
+ * @retval RBUS_ERROR_INVALID_OPERATION                Parameter has no HAL mapping.
+ */
 static rbusError_t xpon_veip_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -901,6 +1226,7 @@ static rbusError_t xpon_veip_get_handler(rbusHandle_t handle, rbusProperty_t pro
         result = xpon_string(request.value, veip->InterDomainName, sizeof(veip->InterDomainName), 25);
     else if (strcmp(request.parameter, "Enable") == 0)
     {
+        /* Unlock maps to Enable=true. */
         if (veip->AdministrativeState != Lock && veip->AdministrativeState != Unlock)
             result = RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION;
         else
@@ -911,6 +1237,7 @@ static rbusError_t xpon_veip_get_handler(rbusHandle_t handle, rbusProperty_t pro
     else if (strcmp(request.parameter, "InterdomainID") == 0)
     {
         char identity[48];
+        /* OMCI managed-entity identity, e.g. "(VEIP,257)". */
         snprintf(identity, sizeof(identity), "(VEIP,%lu)", (unsigned long)veip->MeId);
         rbusValue_SetString(request.value, identity);
     }
@@ -921,6 +1248,15 @@ static rbusError_t xpon_veip_get_handler(rbusHandle_t handle, rbusProperty_t pro
     return xpon_finish_get(&request, result);
 }
 
+/**
+ * @brief Get handler for registered BBF parameters with no HAL source.
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; never set.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_INVALID_OPERATION      Valid name; parameter not supported.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST Unknown name or instance.
+ * @retval RBUS_ERROR_NOT_INITIALIZED        Provider not ready.
+ */
 static rbusError_t xpon_unsupported_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
     XponRequest request;
@@ -934,6 +1270,25 @@ static rbusError_t xpon_unsupported_get_handler(rbusHandle_t handle, rbusPropert
     return xpon_finish_get(&request, xpon_unsupported(request.name, "no equivalent unified HAL field"));
 }
 
+/**
+ * @brief Set handler for ONU.{i}.ANI.{i}.Enable (bool) and Alias (string).
+ *
+ * Writes through GponHal_setParam() to Device.X_RDK_ONT.PhysicalMedia.{i}.
+ * Needs WAN_MANAGER_UNIFICATION_ENABLED; otherwise always rejected.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property with the new value.
+ * @param options  Set options; only committed, sessionless writes are accepted.
+ * @retval RBUS_ERROR_SUCCESS                     HAL updated and cache refreshed.
+ * @retval RBUS_ERROR_INVALID_INPUT               @p property is NULL.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST      Unknown name or instance other than 1.
+ * @retval RBUS_ERROR_NOT_WRITABLE                Element is not handled here.
+ * @retval RBUS_ERROR_INVALID_PARAMETER_TYPE      Wrong value type.
+ * @retval RBUS_ERROR_INVALID_PARAMETER_VALUE     Alias empty, too long or not starting with a letter.
+ * @retval RBUS_ERROR_NOT_INITIALIZED             Provider or DML data not ready.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE HAL read or write failed.
+ * @retval RBUS_ERROR_INVALID_OPERATION           Transactional write, no unique active medium, or feature disabled.
+ */
 static rbusError_t xpon_ani_set_handler(rbusHandle_t handle, rbusProperty_t property, rbusSetHandlerOptions_t *options)
 {
     const rbusDataElement_t *element;
@@ -950,6 +1305,7 @@ static rbusError_t xpon_ani_set_handler(rbusHandle_t handle, rbusProperty_t prop
     element = xpon_find(name, instances);
     if (!element)
         return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
+    /* Only elements wired to this handler are accepted. */
     if (element->cbTable.setHandler != xpon_ani_set_handler)
         return RBUS_ERROR_NOT_WRITABLE;
     parameter = strrchr(name, '.') + 1;
@@ -959,6 +1315,7 @@ static rbusError_t xpon_ani_set_handler(rbusHandle_t handle, rbusProperty_t prop
         return RBUS_ERROR_INVALID_PARAMETER_TYPE;
     if (instances[0] != 1 || instances[1] != 1)
         return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
+    /* Only one-shot committed writes are supported. */
     if (options && (options->sessionId || !options->commit))
         return xpon_unsupported(name, "transactional writes are unavailable");
     pthread_mutex_lock(&g_mutex);
@@ -982,10 +1339,12 @@ static rbusError_t xpon_ani_set_handler(rbusHandle_t handle, rbusProperty_t prop
                 char halName[RBUS_MAX_NAME_LENGTH];
                 char halValue[65];
                 const char *text = alias ? rbusValue_GetString(value, NULL) : NULL;
+                /* BBF Alias must start with a letter and fit the HAL buffer. */
                 if (alias && (!text || !isalpha((unsigned char)text[0]) || strlen(text) >= sizeof(media->Alias)))
                     result = RBUS_ERROR_INVALID_PARAMETER_VALUE;
                 else
                 {
+                    /* Write through the existing X_RDK_ONT HAL parameter. */
                     snprintf(halName, sizeof(halName), "Device.X_RDK_ONT.PhysicalMedia.%lu.%s",
                              (unsigned long)media->uInstanceNumber, parameter);
                     snprintf(halValue, sizeof(halValue), "%s", alias ? text : rbusValue_GetBoolean(value) ? "true" : "false");
@@ -993,6 +1352,7 @@ static rbusError_t xpon_ani_set_handler(rbusHandle_t handle, rbusProperty_t prop
                         result = RBUS_ERROR_DESTINATION_RESPONSE_FAILURE;
                     else
                     {
+                        /* Update the cache and force a HAL re-read on the next get. */
                         if (alias) snprintf(media->Alias, sizeof(media->Alias), "%s", text);
                         else media->Enable = rbusValue_GetBoolean(value);
                         g_fetched[XPON_PHY] = 0;
@@ -1011,6 +1371,21 @@ static rbusError_t xpon_ani_set_handler(rbusHandle_t handle, rbusProperty_t prop
     return result;
 }
 
+/**
+ * @brief Set handler for writable BBF parameters with no HAL target.
+ *
+ * Validates the request so callers get the correct type/instance error first.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property with the new value.
+ * @param options  Set options; transactional writes are rejected.
+ * @retval RBUS_ERROR_INVALID_OPERATION      Valid request; parameter not supported.
+ * @retval RBUS_ERROR_INVALID_INPUT          @p property is NULL.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST Unknown name or instance.
+ * @retval RBUS_ERROR_NOT_WRITABLE           Element is not handled here.
+ * @retval RBUS_ERROR_INVALID_PARAMETER_TYPE Wrong value type.
+ * @retval RBUS_ERROR_NOT_INITIALIZED        Provider not ready.
+ */
 static rbusError_t xpon_unsupported_set_handler(rbusHandle_t handle, rbusProperty_t property, rbusSetHandlerOptions_t *options)
 {
     const rbusDataElement_t *element;
@@ -1031,6 +1406,7 @@ static rbusError_t xpon_unsupported_set_handler(rbusHandle_t handle, rbusPropert
     if (element->cbTable.setHandler != xpon_unsupported_set_handler)
         return RBUS_ERROR_NOT_WRITABLE;
     parameter = strrchr(name, '.') + 1;
+    /* Expected type: boolean for these names, string for the rest. */
     if (strcmp(parameter, "Enable") == 0 || strcmp(parameter, "Reset") == 0 ||
         strcmp(parameter, "HexadecimalPassword") == 0)
         type = RBUS_BOOLEAN;
@@ -1050,6 +1426,13 @@ static rbusError_t xpon_unsupported_set_handler(rbusHandle_t handle, rbusPropert
     return result;
 }
 
+/**
+ * @brief Check whether a row name is in a list.
+ * @param rows  Row names.
+ * @param count Number of entries in @p rows.
+ * @param name  Row name to find, e.g. "Device.XPON.ONU.1.ANI.1".
+ * @return true if found.
+ */
 static bool xpon_has_row(char rows[][RBUS_MAX_NAME_LENGTH], size_t count, const char *name)
 {
     size_t index;
@@ -1058,6 +1441,18 @@ static bool xpon_has_row(char rows[][RBUS_MAX_NAME_LENGTH], size_t count, const 
     return false;
 }
 
+/**
+ * @brief Register/unregister RBUS table rows so they match the populated HAL rows.
+ *
+ * Expected rows: ONU.1, ANI.1, one Transceiver per PhysicalMedia, one GEM Port
+ * per GEM and one EthernetUNI per VEIP.
+ *
+ * @retval RBUS_ERROR_SUCCESS                         g_rows matches the HAL.
+ * @retval RBUS_ERROR_NOT_INITIALIZED                 DML data not available.
+ * @retval RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION Row instance is 0 or too large.
+ * @retval other                                      HAL refresh or rbusTable_* error.
+ * @note Caller must hold g_mutex; g_handle must be valid.
+ */
 static rbusError_t xpon_sync_locked(void)
 {
     char desired[XPON_MAX_ROWS][RBUS_MAX_NAME_LENGTH];
@@ -1073,6 +1468,7 @@ static rbusError_t xpon_sync_locked(void)
         GponMgrDml_GetData_release(data);
         return result;
     }
+    /* Build the expected row list from the HAL data. */
     snprintf(desired[0], sizeof(desired[0]), "Device.XPON.ONU.1");
     snprintf(desired[1], sizeof(desired[1]), "Device.XPON.ONU.1.ANI.1");
     for (index = 0; index < GPON_DATA_MAX_PM; ++index)
@@ -1088,6 +1484,7 @@ static rbusError_t xpon_sync_locked(void)
             snprintf(desired[count++], RBUS_MAX_NAME_LENGTH, "Device.XPON.ONU.1.EthernetUNI.%lu",
                      (unsigned long)data->gpon.Veip.pdata[index]->dml.uInstanceNumber);
     GponMgrDml_GetData_release(data);
+    /* Drop stale rows; walk backwards so memmove keeps indexes valid. */
     for (index = g_rowCount; index > 0; --index)
     {
         size_t slot = index - 1;
@@ -1099,6 +1496,7 @@ static rbusError_t xpon_sync_locked(void)
             --g_rowCount;
         }
     }
+    /* Register missing rows; "Table.N" is split into "Table." and N. */
     for (index = 0; index < count; ++index)
     {
         if (!xpon_has_row(g_rows, g_rowCount, desired[index]))
@@ -1120,6 +1518,13 @@ static rbusError_t xpon_sync_locked(void)
     return RBUS_ERROR_SUCCESS;
 }
 
+/**
+ * @brief RBUS dynamic table sync callback; resyncs all XPON tables.
+ * @param handle    RBUS handle (unused).
+ * @param tableName Table being read (unused; all tables are synced).
+ * @retval RBUS_ERROR_NOT_INITIALIZED Provider not ready.
+ * @retval other                      xpon_sync_locked() result.
+ */
 static rbusError_t xpon_sync(rbusHandle_t handle, const char *tableName)
 {
     rbusError_t result;
@@ -1131,18 +1536,45 @@ static rbusError_t xpon_sync(rbusHandle_t handle, const char *tableName)
     return result;
 }
 
+/**
+ * @brief Table add-row handler; rows follow the HAL and cannot be added.
+ * @param handle   RBUS handle (unused).
+ * @param name     Table name (unused).
+ * @param alias    Requested alias (unused).
+ * @param instance Out instance (not set).
+ * @return Always RBUS_ERROR_NOT_WRITABLE.
+ */
 static rbusError_t xpon_add(rbusHandle_t handle, const char *name, const char *alias, uint32_t *instance)
 {
     (void)handle; (void)name; (void)alias; (void)instance;
     return RBUS_ERROR_NOT_WRITABLE;
 }
 
+/**
+ * @brief Table remove-row handler; rows follow the HAL and cannot be removed.
+ * @param handle RBUS handle (unused).
+ * @param name   Row name (unused).
+ * @return Always RBUS_ERROR_NOT_WRITABLE.
+ */
 static rbusError_t xpon_remove(rbusHandle_t handle, const char *name)
 {
     (void)handle; (void)name;
     return RBUS_ERROR_NOT_WRITABLE;
 }
 
+/**
+ * @brief Event subscription handler for XPON parameters.
+ * @param handle           RBUS handle (unused).
+ * @param action           Subscribe or unsubscribe.
+ * @param name             Parameter name being subscribed to.
+ * @param filter           Event filter (unused).
+ * @param interval         Interval (unused).
+ * @param[out] autoPublish Set to true so RBUS publishes value changes.
+ * @retval RBUS_ERROR_SUCCESS               Subscribed, or unsubscribed.
+ * @retval RBUS_ERROR_INVALID_INPUT         @p autoPublish is NULL.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST Unknown name.
+ * @retval RBUS_ERROR_INVALID_OPERATION     Parameter is unsupported.
+ */
 static rbusError_t xpon_subscribe(rbusHandle_t handle, rbusEventSubAction_t action,
                                  const char *name, rbusFilter_t filter, int32_t interval, bool *autoPublish)
 {
@@ -1151,15 +1583,27 @@ static rbusError_t xpon_subscribe(rbusHandle_t handle, rbusEventSubAction_t acti
     (void)handle; (void)filter; (void)interval;
     if (!autoPublish) return RBUS_ERROR_INVALID_INPUT;
     *autoPublish = false;
+    /* Nothing to clean up on unsubscribe. */
     if (action == RBUS_EVENT_ACTION_UNSUBSCRIBE) return RBUS_ERROR_SUCCESS;
     element = xpon_find(name, instances);
     if (!element) return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
     if (element->cbTable.getHandler == xpon_unsupported_get_handler)
         return xpon_unsupported(name, "events for an unsupported parameter");
+    /* Let RBUS poll the getter and publish value changes. */
     *autoPublish = true;
     return RBUS_ERROR_SUCCESS;
 }
 
+/**
+ * @brief Register the Device.XPON tree and table sync handlers, then sync rows.
+ *
+ * Returns success at once if already initialized. On failure the state is reset.
+ *
+ * @param handle Open RBUS handle owned by the caller.
+ * @retval RBUS_ERROR_SUCCESS        Provider ready.
+ * @retval RBUS_ERROR_INVALID_HANDLE @p handle is NULL.
+ * @retval other                     Registration or row sync error.
+ */
 int GponMgrXponTr181_Init(rbusHandle_t handle)
 {
     size_t index;
@@ -1178,6 +1622,7 @@ int GponMgrXponTr181_Init(rbusHandle_t handle)
     g_rowCount = 0;
     result = rbus_regDataElements(g_handle, (int)g_elementCount, g_elements);
     if (result != RBUS_ERROR_SUCCESS) goto failed;
+    /* Each table gets a sync handler; properties are just counted for the log. */
     for (index = 0; index < g_elementCount; ++index)
     {
         if (g_elements[index].type == RBUS_ELEMENT_TYPE_TABLE)
@@ -1188,6 +1633,7 @@ int GponMgrXponTr181_Init(rbusHandle_t handle)
         else
             ++parameterCount;
     }
+    /* Publish the initial rows before marking ready. */
     result = xpon_sync_locked();
     if (result != RBUS_ERROR_SUCCESS) goto failed;
     g_ready = true;
@@ -1201,6 +1647,10 @@ done:
     return result;
 }
 
+/**
+ * @brief Stop serving requests and forget the RBUS handle.
+ * @note Does not unregister elements; closing the RBUS handle removes them.
+ */
 void GponMgrXponTr181_Close(void)
 {
     pthread_mutex_lock(&g_mutex);

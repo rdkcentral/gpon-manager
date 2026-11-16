@@ -47,6 +47,7 @@
  * 1. Event descriptor table                                                *
  * ====================================================================== */
 
+/** @brief T2 event priority. */
 typedef enum {
     PRIO_INFO     = 0,
     PRIO_WARNING  = 1,
@@ -54,6 +55,7 @@ typedef enum {
     PRIO_CRITICAL = 3
 } priority_t;
 
+/** @brief Event value format. */
 typedef enum {
     FMT_NONE = 0,        /* value = ""                                  */
     FMT_INTF,            /* value = "Interface=<ifname>"                */
@@ -62,8 +64,9 @@ typedef enum {
     FMT_VEIP             /* value = "Interface=<ifname>,Veip=<n>"       */
 } fmt_t;
 
+/** @brief Static description of one telemetry event. */
 typedef struct {
-    const char *marker;
+    const char *marker;     /**< T2 marker name. */
     priority_t  priority;
     fmt_t       fmt;
 } event_desc_t;
@@ -120,6 +123,10 @@ static const event_desc_t k_table[XPON_TELEM_EVENT_ID_MAX] = {
     [XPON_TELEM_INTF_ADMIN_UNLOCK]                = { "XPON_INTF_ADMIN_UNLOCK",                PRIO_INFO,     FMT_VEIP  },
 };
 
+/**
+ * @brief Look up the descriptor for an event id.
+ * @return Descriptor, or NULL if the id is out of range or unmapped.
+ */
 static const event_desc_t *lookup(xponMgr_telemetry_event_id_t id)
 {
     if ((unsigned)id >= XPON_TELEM_EVENT_ID_MAX) return NULL;
@@ -131,6 +138,7 @@ static const event_desc_t *lookup(xponMgr_telemetry_event_id_t id)
  * 2. Value formatter                                                       *
  * ====================================================================== */
 
+/** @brief Per-event data used to build the value string. */
 typedef struct {
     const char     *ifname;
     bool            raised;
@@ -141,6 +149,14 @@ typedef struct {
 
 static const char *onu_state_str(REG_STATE_ENUM state);
 
+/**
+ * @brief Build the T2 value string for an event.
+ * @param desc Event descriptor.
+ * @param ctx  Event context; may be NULL except for FMT_ONU_STATE.
+ * @param out  Output buffer.
+ * @param cap  Size of @p out.
+ * @return Length written (0 for FMT_NONE), or -1 on error/truncation.
+ */
 static int format_value(const event_desc_t *desc,
                         const ctx_t        *ctx,
                         char               *out,
@@ -186,8 +202,9 @@ static int format_value(const event_desc_t *desc,
  * 3. DML alarm / PLOAM state mapper                                        *
  * ====================================================================== */
 
+/** @brief Maps an alarm field in the DML data to its event. */
 typedef struct {
-    size_t                        offset;
+    size_t                        offset;   /**< offsetof() of the alarm flag. */
     xponMgr_telemetry_event_id_t  id;
 } alarm_map_t;
 
@@ -208,11 +225,18 @@ static const alarm_map_t k_alarm_map[] = {
     { offsetof(DML_ALARM, ROGUE), XPON_TELEM_ALARM_ROGUE },
 };
 
+/**
+ * @brief Read one alarm field from a DML_ALARM by byte offset.
+ */
 static ALARM_ENUM alarm_field(const DML_ALARM *alarm, size_t offset)
 {
     return *(const ALARM_ENUM *)((const char *)alarm + offset);
 }
 
+/**
+ * @brief Convert a PLOAM state to "O1".."O9".
+ * @return State name, or "O?" if out of range.
+ */
 static const char *onu_state_str(REG_STATE_ENUM state)
 {
     static const char *const names[] = { "O1", "O2", "O3", "O4", "O5", "O6", "O7", "O8", "O9" };
@@ -230,6 +254,14 @@ static const char *onu_state_str(REG_STATE_ENUM state)
  *   O5 -> any            : ONU left Operation state
  *   any -> O5            : ONU entered Operation state
  *   any -> O7            : OLT disabled the ONU (Disable_Serial_Number)
+ */
+/**
+ * @brief Map a PLOAM state transition to telemetry event ids (rules above).
+ * @param prev Previous state.
+ * @param curr New state.
+ * @param out  Out: event ids, in send order.
+ * @param cap  Capacity of @p out.
+ * @return Number of ids written.
  */
 static size_t map_onu_state(REG_STATE_ENUM prev, REG_STATE_ENUM curr,
                             xponMgr_telemetry_event_id_t out[], size_t cap)
@@ -259,6 +291,9 @@ static size_t map_onu_state(REG_STATE_ENUM prev, REG_STATE_ENUM curr,
  * 4. T2 backend                                                            *
  * ====================================================================== */
 
+/**
+ * @brief Convert a priority to its log label.
+ */
 static const char *prio_str(priority_t p)
 {
     switch (p) {
@@ -270,6 +305,13 @@ static const char *prio_str(priority_t p)
     }
 }
 
+/**
+ * @brief Log an event and send it to T2 when T2 support is compiled in.
+ * @param marker T2 marker name.
+ * @param value  Value string; empty sends a count event.
+ * @param prio   Priority used in the log line.
+ * @return 0 on success, -1 if T2 rejected the event.
+ */
 static int t2_send(const char *marker, const char *value, priority_t prio)
 {
     if (marker == NULL) return 0;
@@ -302,6 +344,7 @@ static int t2_send(const char *marker, const char *value, priority_t prio)
  * 5. Dispatcher + Public API                                               *
  * ====================================================================== */
 
+/* Module state; events are dropped until initialized. */
 static struct {
     pthread_mutex_t mtx;
     bool            initialized;
@@ -311,6 +354,12 @@ static struct {
     .initialized = false,
 };
 
+/**
+ * @brief Format and send one event; dropped silently before init.
+ * @param id  Event id.
+ * @param ctx Event context; may be NULL.
+ * @return 0 on success or when dropped, -1 on error.
+ */
 static int dispatch(xponMgr_telemetry_event_id_t id, const ctx_t *ctx)
 {
     const event_desc_t *desc = lookup(id);
@@ -335,6 +384,7 @@ static int dispatch(xponMgr_telemetry_event_id_t id, const ctx_t *ctx)
     return t2_send(desc->marker, value, desc->priority);
 }
 
+/** @brief See gponmgr_telemetry.h. */
 int xponMgr_telemetry_init(const char *component_name)
 {
     if (component_name == NULL) return -1;
@@ -356,6 +406,7 @@ int xponMgr_telemetry_init(const char *component_name)
     return 0;
 }
 
+/** @brief See gponmgr_telemetry.h. */
 int xponMgr_telemetry_cleanup(void)
 {
     pthread_mutex_lock(&g_state.mtx);
@@ -374,11 +425,13 @@ int xponMgr_telemetry_cleanup(void)
     return 0;
 }
 
+/** @brief See gponmgr_telemetry.h. */
 int xponMgr_telemetry_raise_simple(xponMgr_telemetry_event_id_t id)
 {
     return dispatch(id, NULL);
 }
 
+/** @brief See gponmgr_telemetry.h. */
 int xponMgr_telemetry_raise_intf(xponMgr_telemetry_event_id_t id,
                                  const char *ifname)
 {
@@ -386,6 +439,7 @@ int xponMgr_telemetry_raise_intf(xponMgr_telemetry_event_id_t id,
     return dispatch(id, &ctx);
 }
 
+/** @brief See gponmgr_telemetry.h. */
 int xponMgr_telemetry_raise_alarms(const DML_ALARM *prev,
                                    const DML_ALARM *curr,
                                    ULONG pm_instance)
@@ -407,6 +461,7 @@ int xponMgr_telemetry_raise_alarms(const DML_ALARM *prev,
     return raised;
 }
 
+/** @brief See gponmgr_telemetry.h. */
 int xponMgr_telemetry_raise_onu_state(REG_STATE_ENUM prev,
                                       REG_STATE_ENUM curr)
 {
@@ -424,6 +479,7 @@ int xponMgr_telemetry_raise_onu_state(REG_STATE_ENUM prev,
     return raised;
 }
 
+/** @brief See gponmgr_telemetry.h. */
 int xponMgr_telemetry_raise_veip_admin(DML_LOCK_ENUM prev,
                                        DML_LOCK_ENUM curr,
                                        const char *ifname,
