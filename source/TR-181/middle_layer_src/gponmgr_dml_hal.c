@@ -34,6 +34,7 @@
 #include "gponmgr_dml_hal_param.h"
 #include "gponmgr_link_state_machine.h"
 #include "gponmgr_telemetry.h"
+#include "gponmgr_xpon_rbus.h"
 
 #define HAL_CONNECTION_RETRY_MAX_COUNT 10
 
@@ -649,6 +650,8 @@ void eventcb_VeipAdministrativeState(const char *msg, const int len)
 
                 //update data
                 ret = Map_hal_dml_veip(pGponVeipList, event_name, event_val);
+                if (ret == ANSC_STATUS_SUCCESS)
+                    GponMgrXponTr181_InvalidateCache();     /* VEIP changed or appeared: drop cached XPON HAL data. */
 
                 //check new Veip Interface
                 if(telem_valid)
@@ -716,10 +719,12 @@ void eventcb_VeipOperationalState(const char *msg, const int len)
 
                 //update data
                 ret = Map_hal_dml_veip(pGponVeipList, event_name, event_val);
+                if (ret == ANSC_STATUS_SUCCESS)
+                    GponMgrXponTr181_InvalidateCache();     /* VEIP changed or appeared: drop cached XPON HAL data. */
 
 #if defined(WAN_MANAGER_UNIFICATION_ENABLED)
                 gpon_hal_get_veip_index(event_name, &hal_index);
-                if(hal_index > 0)
+                if(hal_index > 0 && hal_index <= GPON_DATA_MAX_VEIP)
                 {
                     DML_VEIP_CTRL_T* pGponVeipCtrl = pGponDmlData->gpon.Veip.pdata[hal_index-1];
 
@@ -783,6 +788,8 @@ void eventcb_PloamRegistrationState (const char *msg, const int len)
                 if(ret == ANSC_STATUS_SUCCESS && strstr(event_name, "RegistrationState"))
                 {
                     xponMgr_telemetry_raise_onu_state(g_evt_telem.ploam_state, pGponPloam->RegistrationState);
+                    if (g_evt_telem.ploam_state != pGponPloam->RegistrationState)
+                        GponMgrXponTr181_InvalidateCache();     /* ONU state changed: drop cached XPON HAL data. */
                     g_evt_telem.ploam_state = pGponPloam->RegistrationState;
                 }
 

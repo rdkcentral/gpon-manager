@@ -20,4 +20,12 @@ int GponMgrXponRbus_Init(void);
  */
 void GponMgrXponRbus_Close(void);
 
+/**
+ * @brief Mark all cached Device.XPON HAL data stale so the next get reads the HAL.
+ *
+ * Implemented in tr181/gponmgr_xpon_tr181.c; declared here because this header
+ * has no RBUS dependency. Call on ONU state changes. Safe with the DML lock held.
+ */
+void GponMgrXponTr181_InvalidateCache(void);
+
 #endif

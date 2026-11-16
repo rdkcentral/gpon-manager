@@ -178,7 +178,7 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
         return retStatus;
     }
     gpon_hal_get_pm_index(ParamName, &hal_index);    
-    if(hal_index <= 0)
+    if(hal_index <= 0 || hal_index > GPON_DATA_MAX_PM)
     {
         AnscTraceError(("%s:%d:: Invalid index ParamName[%s]\n", __FUNCTION__, __LINE__, ParamName));
         return ANSC_STATUS_FAILURE;
@@ -736,7 +736,7 @@ ANSC_STATUS Map_hal_dml_gem(DML_GEM_LIST_T* gponGemList,char* ParamName, char* p
     }
     
     gpon_hal_get_gem_index(ParamName, &hal_index);    
-    if(hal_index <= 0)
+    if(hal_index <= 0 || hal_index > GPON_DATA_MAX_GEM)
     {
         AnscTraceError(("%s:%d:: Invalid index ParamName[%s]\n", __FUNCTION__, __LINE__, ParamName));
         return ANSC_STATUS_FAILURE;
@@ -971,7 +971,7 @@ ANSC_STATUS Map_hal_dml_veip(DML_VEIP_LIST_T* gponVeipList, char* ParamName, cha
 
     gpon_hal_get_veip_index(ParamName, &hal_index);
     
-    if(hal_index <= 0)
+    if(hal_index <= 0 || hal_index > GPON_DATA_MAX_VEIP)
     {
         AnscTraceError(("%s:%d:: Invalid index ParamName[%s]\n", __FUNCTION__, __LINE__, ParamName));
         return ANSC_STATUS_FAILURE;
