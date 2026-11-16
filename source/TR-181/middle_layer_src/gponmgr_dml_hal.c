@@ -75,6 +75,25 @@
 
 ANSC_STATUS GponHal_get_data(void);
 
+/* Telemetry state fed only by HAL push events, so TR-181 polling can neither
+ * raise nor absorb a transition. Each entry is seeded on its first event from
+ * the DML value held before that event is mapped. Accessed under the DML lock. */
+static struct {
+    bool           ploam_seeded;
+    REG_STATE_ENUM ploam_state;
+    bool           pm_seeded[GPON_DATA_MAX_PM];
+    DML_ALARM      pm_alarm[GPON_DATA_MAX_PM];
+    bool           veip_seeded[GPON_DATA_MAX_VEIP];
+    DML_LOCK_ENUM  veip_admin[GPON_DATA_MAX_VEIP];
+} g_evt_telem;
+
+static void telem_alarm_set_inactive(DML_ALARM* pAlarm)
+{
+    pAlarm->RDI = pAlarm->PEE = pAlarm->LOS = pAlarm->LOF = pAlarm->DACT =
+    pAlarm->DIS = pAlarm->MIS = pAlarm->MEM = pAlarm->SUF = pAlarm->SF =
+    pAlarm->SD = pAlarm->LCDG = pAlarm->TF = pAlarm->ROGUE = INACTIVE;
+}
+
 
 
 /*******************************************************************************
@@ -563,9 +582,32 @@ void eventcb_PhysicalMediaAlarmsAll(const char *msg, const int len)
             if(pGponDmlData != NULL)
             {
                 DML_PHY_MEDIA_LIST_T* pGponPhyList = &(pGponDmlData->gpon.PhysicalMedia);
+                int hal_index = 0;
+
+                gpon_hal_get_pm_index(event_name, &hal_index);
+                bool telem_valid = (hal_index > 0 && hal_index <= GPON_DATA_MAX_PM);
+                if(telem_valid && !g_evt_telem.pm_seeded[hal_index-1])
+                {
+                    DML_PHY_MEDIA_CTRL_T* pPmCtrl = pGponPhyList->pdata[hal_index-1];
+                    if(pPmCtrl != NULL)
+                        g_evt_telem.pm_alarm[hal_index-1] = pPmCtrl->dml.Alarm;
+                    else
+                        telem_alarm_set_inactive(&g_evt_telem.pm_alarm[hal_index-1]);
+                    g_evt_telem.pm_seeded[hal_index-1] = true;
+                }
 
                 //update data
                 ret = Map_hal_dml_pm(pGponPhyList, event_name, event_val);
+
+                if(telem_valid && ret == ANSC_STATUS_SUCCESS)
+                {
+                    DML_ALARM next = g_evt_telem.pm_alarm[hal_index-1];
+                    if(Map_hal_dml_alarm(&next, event_name, event_val) == ANSC_STATUS_SUCCESS)
+                    {
+                        xponMgr_telemetry_raise_alarms(&g_evt_telem.pm_alarm[hal_index-1], &next, (ULONG)hal_index);
+                        g_evt_telem.pm_alarm[hal_index-1] = next;
+                    }
+                }
 
                 //release data
                 GponMgrDml_GetData_release(pGponDmlData);
@@ -596,16 +638,32 @@ void eventcb_VeipAdministrativeState(const char *msg, const int len)
             {
                 DML_VEIP_LIST_T* pGponVeipList = &(pGponDmlData->gpon.Veip);
 
+                gpon_hal_get_veip_index(event_name, &hal_index);
+                bool telem_valid = (hal_index > 0 && hal_index <= GPON_DATA_MAX_VEIP);
+                if(telem_valid && !g_evt_telem.veip_seeded[hal_index-1])
+                {
+                    DML_VEIP_CTRL_T* pVeipCtrl = pGponVeipList->pdata[hal_index-1];
+                    g_evt_telem.veip_admin[hal_index-1] = (pVeipCtrl != NULL) ? pVeipCtrl->dml.AdministrativeState : Lock;
+                    g_evt_telem.veip_seeded[hal_index-1] = true;
+                }
+
                 //update data
                 ret = Map_hal_dml_veip(pGponVeipList, event_name, event_val);
 
                 //check new Veip Interface
-                gpon_hal_get_veip_index(event_name, &hal_index);
-                if(hal_index > 0)
+                if(telem_valid)
                 {
                     DML_VEIP_CTRL_T* pGponVeipCtrl = pGponDmlData->gpon.Veip.pdata[hal_index-1];
                     if(pGponVeipCtrl!= NULL)
                     {
+                        if(ret == ANSC_STATUS_SUCCESS && strstr(event_name, "AdministrativeState"))
+                        {
+                            DML_LOCK_ENUM curr = pGponVeipCtrl->dml.AdministrativeState;
+                            xponMgr_telemetry_raise_veip_admin(g_evt_telem.veip_admin[hal_index-1], curr,
+                                                               pGponVeipCtrl->dml.InterfaceName, (ULONG)hal_index);
+                            g_evt_telem.veip_admin[hal_index-1] = curr;
+                        }
+
                         if(pGponVeipCtrl->sm_created == FALSE)
                         {
                             DML_VEIP* pGponVeip = &(pGponVeipCtrl->dml);
@@ -713,8 +771,20 @@ void eventcb_PloamRegistrationState (const char *msg, const int len)
             {
                 DML_PLOAM* pGponPloam = &(pGponDmlData->gpon.Ploam);
 
+                if(!g_evt_telem.ploam_seeded)
+                {
+                    g_evt_telem.ploam_state = pGponPloam->RegistrationState;
+                    g_evt_telem.ploam_seeded = true;
+                }
+
                 //update data
                 ret = Map_hal_dml_ploam(pGponPloam, event_name, event_val);
+
+                if(ret == ANSC_STATUS_SUCCESS && strstr(event_name, "RegistrationState"))
+                {
+                    xponMgr_telemetry_raise_onu_state(g_evt_telem.ploam_state, pGponPloam->RegistrationState);
+                    g_evt_telem.ploam_state = pGponPloam->RegistrationState;
+                }
 
                 //release data
                 GponMgrDml_GetData_release(pGponDmlData);

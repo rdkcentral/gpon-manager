@@ -31,6 +31,7 @@
  *   - xponMgr_telemetry_raise_intf     (id, ifname)
  *   - xponMgr_telemetry_raise_alarms   (prev, curr, pm_instance)
  *   - xponMgr_telemetry_raise_onu_state(prev, curr)
+ *   - xponMgr_telemetry_raise_veip_admin(prev, curr, ifname, veip_instance)
  *
  * See docs/07_Telemetry_Design.md and docs/08_TR181_Telemetry_Reference.md
  * for details.
@@ -106,6 +107,12 @@ typedef enum {
     XPON_TELEM_ERROR_RBUS_REGISTER_FAILED,
     XPON_TELEM_ERROR_STATE_MACHINE_START_FAILED,
 
+    /* GPON-specific additions (no EPON equivalent) ------------------ */
+    XPON_TELEM_ONU_STATE_CHANGE,            /* §2.1 every PLOAM O-state change    */
+    XPON_TELEM_ONU_EMERGENCY_STOP_CLEARED,  /* §2.1 ONU left O7                   */
+    XPON_TELEM_INTF_ADMIN_LOCK,             /* §2.2 OMCI VEIP Unlock -> Lock      */
+    XPON_TELEM_INTF_ADMIN_UNLOCK,           /* §2.2 OMCI VEIP Lock -> Unlock      */
+
     XPON_TELEM_EVENT_ID_MAX
 } xponMgr_telemetry_event_id_t;
 
@@ -175,9 +182,10 @@ int xponMgr_telemetry_raise_alarms(const DML_ALARM *prev,
 /**
  * @brief Raise ONU status events for a PLOAM activation-state transition.
  *
- * The telemetry module internally maps the (prev -> curr) O-state
- * transition to zero or more ONU status events (see
- * docs/07_Telemetry_Design.md §6). Calling with prev == curr raises nothing.
+ * Every change raises XPON_TELEM_ONU_STATE_CHANGE ("From=O<a>,To=O<b>"),
+ * followed by the milestone events the (prev -> curr) transition maps to
+ * (see docs/07_Telemetry_Design.md §6). Calling with prev == curr raises
+ * nothing.
  *
  * @param prev Previous PLOAM registration state.
  * @param curr New PLOAM registration state.
@@ -185,6 +193,24 @@ int xponMgr_telemetry_raise_alarms(const DML_ALARM *prev,
  */
 int xponMgr_telemetry_raise_onu_state(REG_STATE_ENUM prev,
                                       REG_STATE_ENUM curr);
+
+/**
+ * @brief Raise XPON_TELEM_INTF_ADMIN_LOCK / _UNLOCK for an OMCI VEIP
+ *        AdministrativeState change.
+ *
+ * Value is "Interface=<ifname>,Veip=<n>". Calling with prev == curr
+ * raises nothing.
+ *
+ * @param prev          Previous AdministrativeState.
+ * @param curr          New AdministrativeState.
+ * @param ifname        VEIP interface name; NULL/empty is reported as "unknown".
+ * @param veip_instance X_RDK_ONT.Veip instance number (1-based).
+ * @return Number of events raised (0 or 1), or -1 on failure.
+ */
+int xponMgr_telemetry_raise_veip_admin(DML_LOCK_ENUM prev,
+                                       DML_LOCK_ENUM curr,
+                                       const char *ifname,
+                                       ULONG veip_instance);
 
 #ifdef __cplusplus
 }

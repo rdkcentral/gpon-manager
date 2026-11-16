@@ -10,15 +10,15 @@ RdkGponManager is the RDK-B component that controls and monitors the xPON (GPON 
 ## Purpose
 
 - GPON HAL initialisation, configuration and event subscription (JSON-HAL client)
-- TR-181 data models: `Device.X_RDK_ONT` (CCSP/DML) and `Device.XPON` (BBF, RBUS provider)
+- TR-181 data models: `Device.XPON` (BBF, RBUS provider; primary) and `Device.X_RDK_ONT` (CCSP/DML; RDK extensions)
 - VEIP link state machine and WAN Manager integration
-- **T2 telemetry** of ONU activation, link, alarm, lifecycle and error events (this documentation set)
+- **T2 telemetry** of ONU activation (every PLOAM O-state change plus milestones), VEIP link and OMCI admin state, alarm, lifecycle and error events — 38 events, all raised from HAL push events (TR-181 polling only reports poll failures) (this documentation set)
 
 ## Key Features
 
 - **Event-driven HAL integration**: PhysicalMedia, alarm, VEIP and PLOAM state are pushed by the HAL and mapped into the DML
 - **Per-VEIP link state machine** driving WAN Manager PHY status
-- **Two TR-181 views** of the same data (`Device.X_RDK_ONT` and `Device.XPON`)
+- **Two TR-181 views** of the same data: BBF `Device.XPON` first, with `Device.X_RDK_ONT` for RDK-only extensions
 - **T2 telemetry** with edge-triggered events, matching the EPON Manager telemetry design
 
 ## Documentation Structure
@@ -26,7 +26,7 @@ RdkGponManager is the RDK-B component that controls and monitors the xPON (GPON 
 | # | Document | Description |
 |---|----------|-------------|
 | 07 | [Telemetry Design](07_Telemetry_Design.md) | Telemetry module architecture, API, producers (hooks), threading, build/enablement, verification |
-| 08 | [TR-181 & Telemetry Reference](08_TR181_Telemetry_Reference.md) | `Device.X_RDK_ONT` and `Device.XPON` parameters, telemetry event spec, EPON parity, Appendix A (unsupported `Device.XPON`) |
+| 08 | [TR-181 & Telemetry Reference](08_TR181_Telemetry_Reference.md) | Supported `Device.XPON` parameters, `Device.X_RDK_ONT` extensions (only parameters with no BBF equivalent), telemetry event spec, Appendix A (unsupported `Device.XPON`), Appendix B (`Device.XPON` ↔ `Device.X_RDK_ONT` mapping) |
 | 08 | [TR-181 & Telemetry Reference (HTML)](08_TR181_Telemetry_Reference.html) | Same content as a styled, printable HTML page (open in a browser; *Print / Save as PDF*) |
 | — | [XPON TR-181 Mapping](../XPON-TR181-MAPPING.md) | Field-by-field RDK `X_RDK_ONT` → BBF `Device.XPON` mapping notes |
 
@@ -60,7 +60,10 @@ xponMgr_telemetry_raise_simple(XPON_TELEM_ERROR_HAL_CALL_FAILED);
 xponMgr_telemetry_raise_intf(XPON_TELEM_INTF_LINK_UP, "veip0");
 xponMgr_telemetry_raise_alarms(&prevAlarm, &pm->Alarm, pmInstance);   /* edge-detected */
 xponMgr_telemetry_raise_onu_state(prevState, newState);                /* O-state mapping */
+xponMgr_telemetry_raise_veip_admin(prevAdmin, newAdmin, ifname, veipIdx); /* Lock/Unlock edge */
 ```
+
+State events (ONU state, alarms, VEIP admin) are raised only from the HAL push-event callbacks (`eventcb_*` in `gponmgr_dml_hal.c`). Don't raise telemetry from the shared `Map_hal_dml_*` mappers or any TR-181 get path; the only exception is a poll failure.
 
 To add an event, append an id before `XPON_TELEM_EVENT_ID_MAX` in `gponmgr_telemetry.h`, add its `k_table[]` entry in `gponmgr_telemetry.c`, and document it in 08 §2 (MD and HTML).
 

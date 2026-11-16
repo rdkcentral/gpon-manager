@@ -35,6 +35,7 @@
 #define IEEE_802_1Q_ETHERTYPE_STR_DOUBLE   "Double"
 #define IEEE_802_1Q_ETHERTYPE_STR_UNTAGGED "Untagged"
 
+ANSC_STATUS Map_hal_dml_alarm(DML_ALARM* pGponAlarm, char* ParamName, char* pValue);
 ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, char* pValue);
 ANSC_STATUS Map_hal_dml_gtc(DML_GTC* gponGtc,char* ParamName, char* pValue);
 ANSC_STATUS Map_hal_dml_ploam(DML_PLOAM* gponPloam, char* ParamName, char* pValue);

@@ -57,7 +57,9 @@ typedef enum {
 typedef enum {
     FMT_NONE = 0,        /* value = ""                                  */
     FMT_INTF,            /* value = "Interface=<ifname>"                */
-    FMT_ALARM            /* value = "RAISED"|"CLEARED",PM=<n>           */
+    FMT_ALARM,           /* value = "RAISED"|"CLEARED",PM=<n>           */
+    FMT_ONU_STATE,       /* value = "From=O<a>,To=O<b>"                 */
+    FMT_VEIP             /* value = "Interface=<ifname>,Veip=<n>"       */
 } fmt_t;
 
 typedef struct {
@@ -110,6 +112,12 @@ static const event_desc_t k_table[XPON_TELEM_EVENT_ID_MAX] = {
     [XPON_TELEM_ERROR_RBUS_PUBLISH_FAILED]        = { "XPON_ERROR_RBUS_PUBLISH_FAILED",        PRIO_ERROR,    FMT_NONE  },
     [XPON_TELEM_ERROR_RBUS_REGISTER_FAILED]       = { "XPON_ERROR_RBUS_REGISTER_FAILED",       PRIO_ERROR,    FMT_NONE  },
     [XPON_TELEM_ERROR_STATE_MACHINE_START_FAILED] = { "XPON_ERROR_STATE_MACHINE_START_FAILED", PRIO_CRITICAL, FMT_NONE  },
+
+    /* GPON-specific additions ----------------------------------------- */
+    [XPON_TELEM_ONU_STATE_CHANGE]                 = { "XPON_ONU_STATE_CHANGE",                 PRIO_INFO,     FMT_ONU_STATE },
+    [XPON_TELEM_ONU_EMERGENCY_STOP_CLEARED]       = { "XPON_ONU_EMERGENCY_STOP_CLEARED",       PRIO_INFO,     FMT_NONE  },
+    [XPON_TELEM_INTF_ADMIN_LOCK]                  = { "XPON_INTF_ADMIN_LOCK",                  PRIO_WARNING,  FMT_VEIP  },
+    [XPON_TELEM_INTF_ADMIN_UNLOCK]                = { "XPON_INTF_ADMIN_UNLOCK",                PRIO_INFO,     FMT_VEIP  },
 };
 
 static const event_desc_t *lookup(xponMgr_telemetry_event_id_t id)
@@ -124,10 +132,14 @@ static const event_desc_t *lookup(xponMgr_telemetry_event_id_t id)
  * ====================================================================== */
 
 typedef struct {
-    const char *ifname;
-    bool        raised;
-    ULONG       pm_instance;
+    const char     *ifname;
+    bool            raised;
+    ULONG           instance;   /* PM instance (alarms) / Veip instance */
+    REG_STATE_ENUM  from;
+    REG_STATE_ENUM  to;
 } ctx_t;
+
+static const char *onu_state_str(REG_STATE_ENUM state);
 
 static int format_value(const event_desc_t *desc,
                         const ctx_t        *ctx,
@@ -135,6 +147,7 @@ static int format_value(const event_desc_t *desc,
                         size_t              cap)
 {
     int n = 0;
+    const char *ifn = (ctx && ctx->ifname && ctx->ifname[0]) ? ctx->ifname : "unknown";
 
     if (out == NULL || cap == 0) return -1;
     out[0] = '\0';
@@ -142,17 +155,23 @@ static int format_value(const event_desc_t *desc,
     switch (desc->fmt) {
     case FMT_NONE:
         return 0;
-    case FMT_INTF: {
-        const char *ifn = (ctx && ctx->ifname && ctx->ifname[0]) ? ctx->ifname : "unknown";
+    case FMT_INTF:
         n = snprintf(out, cap, "Interface=%s", ifn);
         break;
-    }
     case FMT_ALARM: {
         const char *state = (ctx && ctx->raised) ? "RAISED" : "CLEARED";
         n = snprintf(out, cap, "%s,PM=%lu", state,
-                     (unsigned long)(ctx ? ctx->pm_instance : 0));
+                     (unsigned long)(ctx ? ctx->instance : 0));
         break;
     }
+    case FMT_ONU_STATE:
+        if (ctx == NULL) return -1;
+        n = snprintf(out, cap, "From=%s,To=%s", onu_state_str(ctx->from), onu_state_str(ctx->to));
+        break;
+    case FMT_VEIP:
+        n = snprintf(out, cap, "Interface=%s,Veip=%lu", ifn,
+                     (unsigned long)(ctx ? ctx->instance : 0));
+        break;
     default:
         return -1;
     }
@@ -203,6 +222,8 @@ static const char *onu_state_str(REG_STATE_ENUM state)
 
 /*
  * PLOAM O-state transition -> ONU status events (G.984.3 / G.987.3 / G.9807.1):
+ *   any change           : XPON_ONU_STATE_CHANGE (raw transition)
+ *   O7 -> any            : emergency stop lifted
  *   O1 -> any            : downstream synchronisation acquired
  *   any -> O6            : intermittent LODS (downstream lost while operating)
  *   O2..O5 -> O1         : downstream lost before/while ranging
@@ -217,6 +238,10 @@ static size_t map_onu_state(REG_STATE_ENUM prev, REG_STATE_ENUM curr,
 
     if (prev == curr) return 0;
 
+    if (n < cap)
+        out[n++] = XPON_TELEM_ONU_STATE_CHANGE;
+    if (prev == O7 && n < cap)
+        out[n++] = XPON_TELEM_ONU_EMERGENCY_STOP_CLEARED;
     if (prev == O1 && n < cap)
         out[n++] = XPON_TELEM_ONU_DOWNSTREAM_SIGNAL_DETECTED;
     if ((curr == O6 || (curr == O1 && prev >= O2 && prev <= O5)) && n < cap)
@@ -357,7 +382,7 @@ int xponMgr_telemetry_raise_simple(xponMgr_telemetry_event_id_t id)
 int xponMgr_telemetry_raise_intf(xponMgr_telemetry_event_id_t id,
                                  const char *ifname)
 {
-    ctx_t ctx = { .ifname = ifname, .raised = false, .pm_instance = 0 };
+    ctx_t ctx = { .ifname = ifname };
     return dispatch(id, &ctx);
 }
 
@@ -375,9 +400,8 @@ int xponMgr_telemetry_raise_alarms(const DML_ALARM *prev,
         ALARM_ENUM after  = alarm_field(curr, k_alarm_map[i].offset);
         if (before == after) continue;
 
-        ctx_t ctx = { .ifname = NULL,
-                      .raised = (after == ACTIVE),
-                      .pm_instance = pm_instance };
+        ctx_t ctx = { .raised = (after == ACTIVE),
+                      .instance = pm_instance };
         if (dispatch(k_alarm_map[i].id, &ctx) == 0) ++raised;
     }
     return raised;
@@ -386,7 +410,8 @@ int xponMgr_telemetry_raise_alarms(const DML_ALARM *prev,
 int xponMgr_telemetry_raise_onu_state(REG_STATE_ENUM prev,
                                       REG_STATE_ENUM curr)
 {
-    xponMgr_telemetry_event_id_t ids[5];
+    xponMgr_telemetry_event_id_t ids[8];
+    ctx_t ctx = { .from = prev, .to = curr };
     size_t count, i;
     int raised = 0;
 
@@ -395,6 +420,18 @@ int xponMgr_telemetry_raise_onu_state(REG_STATE_ENUM prev,
     CcspTraceInfo(("telemetry: PLOAM state %s -> %s\n", onu_state_str(prev), onu_state_str(curr)));
     count = map_onu_state(prev, curr, ids, sizeof(ids) / sizeof(ids[0]));
     for (i = 0; i < count; ++i)
-        if (dispatch(ids[i], NULL) == 0) ++raised;
+        if (dispatch(ids[i], &ctx) == 0) ++raised;
     return raised;
+}
+
+int xponMgr_telemetry_raise_veip_admin(DML_LOCK_ENUM prev,
+                                       DML_LOCK_ENUM curr,
+                                       const char *ifname,
+                                       ULONG veip_instance)
+{
+    ctx_t ctx = { .ifname = ifname, .instance = veip_instance };
+
+    if (prev == curr) return 0;
+    return dispatch(curr == Lock ? XPON_TELEM_INTF_ADMIN_LOCK : XPON_TELEM_INTF_ADMIN_UNLOCK,
+                    &ctx) == 0 ? 1 : -1;
 }
