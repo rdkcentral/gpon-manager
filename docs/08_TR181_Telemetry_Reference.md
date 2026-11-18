@@ -31,9 +31,13 @@
    4. [System Lifecycle Events](#24-system-lifecycle-events)
    5. [Error Events](#25-error-events)
    6. [ONU State → Event Mapping](#26-onu-state--event-mapping)
-      1. [ONU Activation States](#261-onu-activation-states)
-      2. [Transition Reference](#262-transition-reference)
-      3. [Common Sequences](#263-common-sequences)
+      1. [Standards Overview](#261-standards-overview)
+      2. [GPON (G.984.3) — States](#262-gpon-g9843--states)
+      3. [GPON (G.984.3) — Transitions](#263-gpon-g9843--transitions)
+      4. [XGS-PON (G.9807.1) — States](#264-xgs-pon-g98071--states)
+      5. [XGS-PON (G.9807.1) — Transitions](#265-xgs-pon-g98071--transitions)
+      6. [Pairs Not Defined by the Standards](#266-pairs-not-defined-by-the-standards)
+      7. [Common Sequences](#267-common-sequences)
    7. [Value Formats & Duplicate Suppression](#27-value-formats--duplicate-suppression)
    8. [Priority Definitions](#28-priority-definitions)
    9. [Summary Statistics](#29-summary-statistics)
@@ -273,7 +277,7 @@ Derived from transitions of the ONU activation state (`Device.XPON.ONU.{i}.ANI.{
 | `XPON_ONU_DEREGISTRATION` | ONU left *O5* (Operation) for any other state. | Warning | — | OLT deactivation, LOS, or ranging loss. 0–1/day normally. |
 | `XPON_ONU_EMERGENCY_STOP` | ONU entered *O7* (Emergency Stop) — OLT ordered the transmitter off (Disable_Serial_Number PLOAM). GPON-specific; no EPON equivalent. | Critical | — | Only on OLT action against this ONU (rogue / operator disable). Very rare. |
 | `XPON_ONU_EMERGENCY_STOP_CLEARED` | ONU left *O7* (Emergency Stop) — the OLT re-enabled the transmitter (Disable_Serial_Number with *enable*). GPON-specific; no EPON equivalent. | Info | — | Paired with each EMERGENCY_STOP. Very rare. |
-| `XPON_ONU_STATE_CHANGE` | Every ONU activation state change, including the ones the milestone events above don't cover (moves among *O2*/*O3*/*O4*, *O8*/*O9* tuning, returns from *O6*–*O9* to *O1*). Always sent first for a transition. The `From`/`To` pair identifies the transition (ranging failure, TO1/TO2 expiry, POPUP recovery, OLT disable, tuning), so no per-transition markers are defined; see §2.6.2 for the meaning and possible reasons of each pair. GPON-specific; no EPON equivalent. | Info | `From=O<a>,To=O<b>` | Every PLOAM state change. About 4–5 per activation (O1→O2→O3→O4→O5), more while ranging is unstable. |
+| `XPON_ONU_STATE_CHANGE` | Every ONU activation state change, including the ones the milestone events above don't cover (moves among *O2*/*O3*/*O4*, *O8*/*O9* tuning, returns from *O6*–*O9* to *O1*). Always sent first for a transition. The `From`/`To` pair identifies the transition (ranging failure, TO1/TO2 expiry, POPUP / LODS recovery, OLT disable), so no per-transition markers are defined; see §2.6.3 (GPON) and §2.6.5 (XGS-PON) for the meaning and possible reasons of each pair. GPON-specific; no EPON equivalent. | Info | `From=O<a>,To=O<b>` | Every PLOAM state change. About 4–5 per activation (O1→O2→O3→O4→O5), more while ranging is unstable. |
 
 ### 2.2 Interface Link Events
 
@@ -336,124 +340,126 @@ Operational failures in the HAL, RBUS and state-machine paths. Repeating paths a
 
 ### 2.6 ONU State → Event Mapping
 
-`XPON_ONU_STATE_CHANGE` carries the previous and the new state (`From=O<a>,To=O<b>`), so every transition, including ranging failures, TO1/TO2 expiry, POPUP recovery and NG-PON2 tuning, is identified from that pair alone. No extra per-transition markers are defined. The milestone events (`XPON_ONU_LOS`, `_DOWNSTREAM_SIGNAL_DETECTED`, `_REGISTRATION`, `_DEREGISTRATION`, `_EMERGENCY_STOP`, `_EMERGENCY_STOP_CLEARED`) are kept for EPON parity and simple dashboards; they never carry information that isn't already in the pair.
+`XPON_ONU_STATE_CHANGE` carries the previous and the new state (`From=O<a>,To=O<b>`), so every transition, including ranging failures, TO1/TO2 expiry, POPUP recovery and OLT disable, is identified from that pair alone. No extra per-transition markers are defined. The milestone events are kept for EPON parity and simple dashboards; they never carry information that isn't already in the pair.
 
-Rules applied by `map_onu_state()`: every change raises `XPON_ONU_STATE_CHANGE` first; milestone events follow in this order: EMERGENCY_STOP_CLEARED, DOWNSTREAM_SIGNAL_DETECTED, LOS, DEREGISTRATION, REGISTRATION, EMERGENCY_STOP. Unchanged state raises nothing.
+Rules applied by `map_onu_state()`: every change raises `XPON_ONU_STATE_CHANGE` first, then the milestones that match, in this order: EMERGENCY_STOP_CLEARED (leaving O7), DOWNSTREAM_SIGNAL_DETECTED (leaving O1), LOS (entering O6, or O2–O5 → O1), DEREGISTRATION (leaving O5), REGISTRATION (entering O5), EMERGENCY_STOP (entering O7). Unchanged state raises nothing. The rules are the same for every PON mode.
 
-#### 2.6.1 ONU Activation States
+#### 2.6.1 Standards Overview
 
-| State | G.984.3 (GPON) | G.9807.1 (XGS-PON) / G.989.3 (NG-PON2) | Meaning |
+GPON (ITU-T G.984 series, activation in G.984.3) is the original 2.5G PON. XGS-PON (ITU-T G.9807.1) is the 10G symmetric PON; its TC layer and activation state machine come from NG-PON2 (G.989.3), without the wavelength-tuning states O8/O9. G.989.3 kept the GPON state numbers on purpose: it merged *Standby* and *Serial Number* into one state named *O2-3*, so O4 Ranging, O5 Operation, O6 and O7 have the same numbers and roughly the same meaning in both standards. XG-PON (G.987.3) uses a different O1–O6 numbering and is not covered here.
+
+|  | GPON (G.984.3) | XGS-PON (G.9807.1) |
+|---|---|---|
+| Rates (down / up) | 2.488 / 1.244 Gbit/s | 9.953 / 9.953 Gbit/s (symmetric) |
+| TC layer | GTC (G.984.3): GEM framing, 13-byte PLOAM messages | XGS-TC (G.9807.1 Annex C, based on G.989.3): XGEM framing, 48-byte PLOAM messages with MIC, burst profiles |
+| Activation states | Seven: O1–O7 | Six: O1, O2-3, O4–O7 (O2 and O3 merged) |
+| Network parameters | Upstream_Overhead PLOAM, received in O2 (Standby) | Burst_Profile PLOAM, learned in O1 (sub-state O1.2 Profile learning) |
+| Serial-number / ranging timer (TO1) | Covers serial-number acquisition and ranging (O3 + O4); expiry → O2 | Covers ranging only (O4); expiry → O2-3. No timeout in O2-3 |
+| Downstream loss in service (O6) | POPUP: ONU waits for a POPUP PLOAM. Directed POPUP → O5, broadcast POPUP → O4 (re-range), TO2 expiry → O1 | Intermittent LODS: ONU returns to O5 by itself when sync comes back before TO2 expires; TO2 expiry → O1. No POPUP message |
+| Authentication | Password (Request_Password / Password PLOAM) | Registration ID (Registration PLOAM); PLOAM integrity protected by MIC |
+
+> **How the HAL reports states:** `Device.X_RDK_ONT.Ploam.RegistrationState` is an enum of `O1`…`O9` in the HAL schema. The schema defines the strings only, not their meaning, and has no `O2-3` value. Neither the schema nor GponManager checks which numbering the vendor HAL uses; the tables below assume the vendor follows the standard for the active `PonMode`. GponManager matches the value by prefix: sub-states (`O1.1`, `O1.2`, `O5.1`, …) become their parent state, and a literal `O2-3` becomes O2. On XGS-PON, **O2 and O3 both mean O2-3**. O8/O9 are NG-PON2 only and are not expected on GPON or XGS-PON.
+
+#### 2.6.2 GPON (G.984.3) — States
+
+| State | Name | Meaning |
+|---|---|---|
+| *O1* | Initial | ONU powered up, no downstream frame synchronisation (LOS/LOF). |
+| *O2* | Standby | Downstream synchronised. Waiting for the Upstream_Overhead PLOAM with the upstream parameters (delimiter, pre-assigned delay, power level). |
+| *O3* | Serial Number | Upstream parameters applied. Answers the OLT's serial-number requests and waits for Assign_ONU-ID. TO1 is running. |
+| *O4* | Ranging | ONU-ID assigned. Answers ranging requests and waits for Ranging_Time (equalisation delay). TO1 is running. |
+| *O5* | Operation | In service: ONU-ID and equalisation delay set; data, PLOAM and OMCI flow. Password exchange normally happens here. |
+| *O6* | POPUP | LOS or LOF detected in O5. Transmitter off, ONU-ID and equalisation delay kept. Waits for a POPUP PLOAM; TO2 is running. |
+| *O7* | Emergency Stop | Disable_Serial_Number (disable) received. Transmitter off until the OLT re-enables the serial number. |
+
+#### 2.6.3 GPON (G.984.3) — Transitions
+
+*Milestones* lists the `XPON_ONU_*` events sent after `XPON_ONU_STATE_CHANGE` for that transition.
+
+| Transition | Meaning | Possible reasons | Milestones |
 |---|---|---|---|
-| *O1* | Initial | Initial (O1.1 Off-sync / O1.2 Profile learning) | No downstream sync (LOS/LOF). Default state after power-up and after any unrecovered downstream loss. |
-| *O2* | Standby | Serial Number (O2-3) | Downstream synchronised. Waiting for the network parameters (Upstream_Overhead in G.984.3, Burst_Profile in G.989.3/G.9807.1). |
-| *O3* | Serial Number | Serial Number (O2-3) | Answering the OLT's serial-number requests. Waiting for Assign_ONU-ID. |
-| *O4* | Ranging | Ranging | ONU-ID assigned. Waiting for the OLT to complete ranging (Ranging_Time with the equalisation delay). |
-| *O5* | Operation | Operation (O5.1 Associated / O5.2 Pending) | In service: ONU-ID and equalisation delay set, PLOAM and OMCI channels up. |
-| *O6* | POPUP | Intermittent LODS | Downstream lost while in O5. Timer TO2 runs; the ONU keeps its ONU-ID and equalisation delay until TO2 expires. |
-| *O7* | Emergency Stop | Emergency Stop | OLT sent Disable_Serial_Number (disable). Transmitter is off until the OLT re-enables the serial number. |
-| *O8* | — | Downstream Tuning (G.989.3 only) | NG-PON2 TWDM: tuning the receiver to a new wavelength channel. Never entered on GPON / XG-PON / XGS-PON. |
-| *O9* | — | Upstream Tuning (G.989.3 only) | NG-PON2 TWDM: tuning the transmitter to a new wavelength channel. Never entered on GPON / XG-PON / XGS-PON. |
+| O1 → O2 | Downstream frame synchronisation achieved. | Power-up / reboot, fibre reconnected, OLT port enabled, recovery after an outage. | DOWNSTREAM_SIGNAL_DETECTED |
+| O2 → O3 | Upstream_Overhead received; ONU starts answering serial-number requests. | Normal activation step. | — |
+| O3 → O4 | Assign_ONU-ID received: the OLT discovered the serial number. | Normal activation step. | — |
+| O4 → O5 | Ranging_Time received; ONU in service. | Normal activation completed. | REGISTRATION |
+| O2 / O3 / O4 → O1 | LOS or LOF before activation completed. | Fibre cut, unplugged or dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault. | LOS |
+| O3 → O2 | TO1 expired (typically 10 s) before an ONU-ID was assigned. | OLT doesn't accept the serial number: ONU not provisioned on the OLT, wrong SN, ONU on the wrong PON port. Or the OLT doesn't receive the serial-number bursts: upstream Tx power too low, high ODN loss, ONU beyond the OLT's reach. Repeated O2 → O3 → O2 cycling is the typical signature of an ONU not provisioned on the OLT. | — |
+| O4 → O2 | TO1 expired during ranging, or Deactivate_ONU-ID received. ONU-ID discarded. | Ranging bursts not received (upstream power, ODN loss), ONU outside the ranging window, upstream collision with a rogue ONU. Check `XPON_ALARM_SUF` (start-up failure) and `XPON_ALARM_DACT`. | — |
+| O5 → O2 | Deactivate_ONU-ID received: OLT deregistered the ONU. | Password mismatch, operator deleted or re-provisioned the ONU, OLT detected excessive errors or drift of window. Check `XPON_ALARM_DACT`. | DEREGISTRATION |
+| O5 → O6 | LOS or LOF in service; TO2 started. | Fibre cut, unplugged or dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault, OLT protection switch-over. Followed by O6 → O5, O6 → O4 or O6 → O1. | LOS, DEREGISTRATION |
+| O6 → O5 | Directed POPUP received before TO2 expired; ONU resumes with the same ONU-ID and equalisation delay. | Short downstream glitch. Frequent O5 → O6 → O5 points to a marginal optical budget; check `XPON_ALARM_SD/SF`. | REGISTRATION |
+| O6 → O4 | Broadcast POPUP received before TO2 expired; ONU re-ranges. | PON-wide interruption affecting all ONUs on the port: OLT port or laser glitch, protection switch-over, OLT software restart. | — |
+| O6 → O1 | TO2 expired without a POPUP; ONU-ID and equalisation delay discarded, full re-activation. | Sustained outage: fibre cut, OLT reboot, PON card down. | — |
+| O2 / O3 / O4 / O6 → O7 | Disable_Serial_Number (disable) received for this serial number. | Rogue-ONU isolation, operator disable, subscriber suspension, serial number blocked on the OLT. Check `XPON_ALARM_DIS`. | EMERGENCY_STOP |
+| O5 → O7 | Disable_Serial_Number (disable) received while in service; the ONU leaves service. | Rogue-ONU isolation, operator disable, subscriber suspension, serial number blocked on the OLT. Check `XPON_ALARM_DIS`. | DEREGISTRATION, EMERGENCY_STOP |
+| O7 → O1 / O2 | Disable_Serial_Number (enable) received; ONU restarts activation. | Operator re-enabled the ONU, rogue condition cleared, subscriber reinstated. | EMERGENCY_STOP_CLEARED |
 
-> **Numbering:** The HAL reports O1–O9 with the G.984.3 numbering for O1–O7 and the G.989.3 numbering for O8/O9 (O5 is always Operation). O2 and O3 are reported separately; the G.989.3 / G.9807.1 combined *O2-3* state is reported as O2 or O3. G.987.3 (XG-PON) uses its own O1–O6 numbering natively; the HAL is expected to map it onto the states above.
+#### 2.6.4 XGS-PON (G.9807.1) — States
 
-#### 2.6.2 Transition Reference
+| State | Reported as | Name | Meaning |
+|---|---|---|---|
+| *O1* | `O1` | Initial (O1.1 Off-sync, O1.2 Profile learning) | O1.1: no downstream sync. O1.2: synchronised, learning the burst profiles from Burst_Profile PLOAMs. |
+| *O2-3* | O2 or O3 | Serial Number | Burst profile known. Answers serial-number grants (Serial_Number_ONU PLOAM with registration ID) and waits for Assign_ONU-ID. No timer. |
+| *O4* | `O4` | Ranging | ONU-ID assigned. Answers ranging grants and waits for Ranging_Time. TO1 is running. |
+| *O5* | `O5` | Operation | In service: ONU-ID and equalisation delay set; data, PLOAM and OMCI flow. |
+| *O6* | `O6` | Intermittent LODS | Loss of downstream sync in O5. Transmitter off, ONU-ID and equalisation delay kept; TO2 is running. |
+| *O7* | `O7` | Emergency Stop | Disable_Serial_Number (disable) received. Transmitter off until the OLT re-enables the serial number. |
 
-All 72 transitions. *Milestones* lists the `XPON_ONU_*` events sent after `XPON_ONU_STATE_CHANGE`. *Category*: **Normal** activation step, **Skipped states** (normal outcome, intermediate states not reported), **Activation failure**, **Downstream loss**, **Re-ranging**, **Recovery**, **OLT action**, **Tuning** / **Tuning failure** (NG-PON2 only), **Abnormal** (not a direct ITU-T transition; investigate).
+#### 2.6.5 XGS-PON (G.9807.1) — Transitions
 
-> **Skipped states:** The HAL pushes `Ploam.RegistrationState` on change and only the latest value. When several transitions happen between two pushes (fast activation, short outages), intermediate states are not reported, so the pair can be one that ITU-T doesn't define directly (for example *O1 → O5* or *O4 → O6*). The table lists the most likely path for those pairs. For the reason behind a transition, correlate with the `XPON_ALARM_*` events (§2.3) raised around the same time: LOS/LOF (downstream loss), SUF (start-up failure), DACT (Deactivate_ONU-ID), DIS (Disable_Serial_Number), SD/SF (marginal optical budget).
+*Milestones* lists the `XPON_ONU_*` events sent after `XPON_ONU_STATE_CHANGE` for that transition. O2-3 is reported as O2 or O3; both give the same milestones.
 
-| From → To | Category | Meaning | Possible reasons | Milestones |
-|---|---|---|---|---|
-| O1 → O2 | Normal | Downstream synchronisation acquired; activation starts. | Power-up / reboot, fibre reconnected, OLT port enabled, recovery after a downstream loss. | DOWNSTREAM_SIGNAL_DETECTED |
-| O1 → O3 | Normal | Downstream sync acquired and network parameters received (O2 not reported). | The HAL publishes only the latest state, so intermediate states were not reported (fast activation), or the HAL reports the G.989.3 combined O2-3 state as O3. | DOWNSTREAM_SIGNAL_DETECTED |
-| O1 → O4 | Skipped states | Sync, serial-number acquisition and ONU-ID assignment done between two reports. | The HAL publishes only the latest state, so intermediate states were not reported. Normal outcome, fast activation. | DOWNSTREAM_SIGNAL_DETECTED |
-| O1 → O5 | Skipped states | Full activation completed between two reports; ONU in service. | The HAL publishes only the latest state, so intermediate states were not reported. Normal outcome. | DOWNSTREAM_SIGNAL_DETECTED, REGISTRATION |
-| O1 → O6 | Abnormal | Not a direct ITU-T transition (O6 is entered only from O5). The ONU activated and lost downstream again before O5 was reported. | Unstable downstream: Rx power near sensitivity, loose connector, OLT port flapping. Check `XPON_ALARM_LOS/LOF/SD/SF`. | DOWNSTREAM_SIGNAL_DETECTED, LOS |
-| O1 → O7 | OLT action | ONU disabled by the OLT right after it announced its serial number (O2–O4 not reported), or the ONU restored a persisted Emergency Stop at boot. | Disable_Serial_Number (disable) from the OLT: rogue-ONU isolation, operator disable or subscriber suspension. Serial number blocked or not authorised on the OLT. Check `XPON_ALARM_DIS`. | DOWNSTREAM_SIGNAL_DETECTED, EMERGENCY_STOP |
-| O1 → O8 | Abnormal | Not a direct ITU-T transition (O8 is entered from O5/O6). | The HAL publishes only the latest state, so intermediate states were not reported, or vendor HAL reports channel scanning as O8 (NG-PON2 only). | DOWNSTREAM_SIGNAL_DETECTED |
-| O1 → O9 | Abnormal | Not a direct ITU-T transition (O9 is entered from O8). | The HAL publishes only the latest state, so intermediate states were not reported, or vendor-specific state reporting (NG-PON2 only). | DOWNSTREAM_SIGNAL_DETECTED |
-| O2 → O1 | Downstream loss | Downstream lost before the network parameters were received. | Fibre cut / unplugged / dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault. | LOS |
-| O2 → O3 | Normal | Network parameters received; ONU now answers serial-number requests. | Normal activation step. | — |
-| O2 → O4 | Normal | ONU-ID assigned quickly; O3 not reported. | The HAL publishes only the latest state, so intermediate states were not reported. Normal activation. | — |
-| O2 → O5 | Skipped states | Activation completed between two reports; ONU in service. | The HAL publishes only the latest state, so intermediate states were not reported. Normal outcome. | REGISTRATION |
-| O2 → O6 | Abnormal | Not a direct ITU-T transition. O5 was reached and downstream was lost before O5 was reported. | Unstable downstream right after activation: Rx power near sensitivity, connector fault. | LOS |
-| O2 → O7 | OLT action | OLT disabled this serial number during activation. | Disable_Serial_Number (disable) from the OLT: rogue-ONU isolation, operator disable or subscriber suspension. | EMERGENCY_STOP |
-| O2 → O8 | Abnormal | Not a direct ITU-T transition. | The HAL publishes only the latest state, so intermediate states were not reported, or vendor-specific state reporting (NG-PON2 only). | — |
-| O2 → O9 | Abnormal | Not a direct ITU-T transition. | The HAL publishes only the latest state, so intermediate states were not reported, or vendor-specific state reporting (NG-PON2 only). | — |
-| O3 → O1 | Downstream loss | Downstream lost during serial-number acquisition. | Fibre cut / unplugged / dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault. | LOS |
-| O3 → O2 | Activation failure | Serial-number phase abandoned: TO1 expired (typically 10 s) before an ONU-ID was assigned. | OLT doesn't accept the serial number: ONU not provisioned on the OLT, wrong SN / password / registration ID, ONU on the wrong PON port. Or the OLT doesn't receive the SN bursts: upstream Tx power too low, high ODN loss, ONU outside the OLT ranging window. Repeated O2↔O3 cycling is the typical signature of an ONU that isn't provisioned on the OLT. | — |
-| O3 → O4 | Normal | Assign_ONU-ID received; ranging starts. | Normal activation step. | — |
-| O3 → O5 | Normal | Ranging completed quickly; O4 not reported. ONU in service. | The HAL publishes only the latest state, so intermediate states were not reported. Normal activation. | REGISTRATION |
-| O3 → O6 | Abnormal | Not a direct ITU-T transition. O5 was reached and downstream was lost before O5 was reported. | Unstable downstream right after activation. | LOS |
-| O3 → O7 | OLT action | OLT disabled this serial number during serial-number acquisition. | Disable_Serial_Number (disable) from the OLT: rogue-ONU isolation, operator disable or subscriber suspension. Often an unauthorised / blacklisted serial number. | EMERGENCY_STOP |
-| O3 → O8 | Abnormal | Not a direct ITU-T transition. | The HAL publishes only the latest state, so intermediate states were not reported, or vendor-specific state reporting (NG-PON2 only). | — |
-| O3 → O9 | Abnormal | Not a direct ITU-T transition. | The HAL publishes only the latest state, so intermediate states were not reported, or vendor-specific state reporting (NG-PON2 only). | — |
-| O4 → O1 | Downstream loss | Downstream lost during ranging. | Fibre cut / unplugged / dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault. | LOS |
-| O4 → O2 | Activation failure | Ranging failed: TO1 expired or Deactivate_ONU-ID received. ONU-ID discarded. | OLT can't range the ONU: upstream bursts not received (low Tx power, high ODN loss), ONU beyond the OLT's distance / differential-reach window, upstream collision with a rogue ONU. Or the OLT rejected the ONU after ONU-ID assignment (password / registration-ID / LOID authentication failure). Check `XPON_ALARM_SUF` and `XPON_ALARM_DACT`. | — |
-| O4 → O3 | Activation failure | Same as O4 → O2 (O2 not reported, or the HAL reports the G.989.3 O2-3 state as O3). | See O4 → O2. | — |
-| O4 → O5 | Normal | Ranging_Time received; ONU in service. | Normal activation completed. | REGISTRATION |
-| O4 → O6 | Abnormal | Not a direct ITU-T transition. O5 was reached and downstream was lost before O5 was reported. | Unstable downstream right after activation. | LOS |
-| O4 → O7 | OLT action | OLT disabled this serial number during ranging. | Disable_Serial_Number (disable) from the OLT: rogue-ONU isolation, operator disable or subscriber suspension. Can follow rogue-ONU detection during ranging. | EMERGENCY_STOP |
-| O4 → O8 | Abnormal | Not a direct ITU-T transition. | The HAL publishes only the latest state, so intermediate states were not reported, or vendor-specific state reporting (NG-PON2 only). | — |
-| O4 → O9 | Abnormal | Not a direct ITU-T transition. | The HAL publishes only the latest state, so intermediate states were not reported, or vendor-specific state reporting (NG-PON2 only). | — |
-| O5 → O1 | Downstream loss | Service lost and not recovered: downstream loss longer than TO2 (O6 not reported), or the PON stack was re-initialised. | Fibre cut / unplugged / dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault, OLT reboot, vendor PON software reset. | LOS, DEREGISTRATION |
-| O5 → O2 | OLT action | ONU deregistered by the OLT (Deactivate_ONU-ID); activation restarts. | Operator deleted / re-provisioned the ONU, authentication failure (password / registration ID / LOID), OLT detected excessive errors or drift of window, OLT PON card reset. Check `XPON_ALARM_DACT`. | DEREGISTRATION |
-| O5 → O3 | OLT action | Same as O5 → O2 (O2 not reported, or G.989.3 O2-3 reported as O3). | See O5 → O2. | DEREGISTRATION |
-| O5 → O4 | Re-ranging | ONU re-ranged without a full re-activation (O6 not reported): after a short downstream loss the OLT sent a broadcast POPUP (G.984.3). | PON-wide downstream interruption: OLT port / laser glitch, Type-B protection switch-over, OLT software restart. | DEREGISTRATION |
-| O5 → O6 | Downstream loss | Downstream lost while in service; TO2 started (intermittent LODS / POPUP). | Fibre cut / unplugged / dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault, OLT protection switch-over. Followed by O6 → O5 (glitch recovered) or O6 → O1 (outage). | LOS, DEREGISTRATION |
-| O5 → O7 | OLT action | Emergency stop while in service; transmitter off. | Disable_Serial_Number (disable) from the OLT: rogue-ONU isolation, operator disable or subscriber suspension. | DEREGISTRATION, EMERGENCY_STOP |
-| O5 → O8 | Tuning | OLT moved the ONU to another wavelength channel (Tuning_Control). | NG-PON2 load balancing, channel protection or maintenance. | DEREGISTRATION |
-| O5 → O9 | Tuning | Upstream-only channel change (O8 not reported). | NG-PON2 load balancing, channel protection or maintenance. | DEREGISTRATION |
-| O6 → O1 | Downstream loss | TO2 expired: the downstream outage outlasted TO2. ONU-ID and equalisation delay discarded; full re-activation needed. | Sustained outage: fibre cut, unplugged or dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault, OLT reboot. | — |
-| O6 → O2 | Downstream loss | TO2 expired and downstream was re-acquired before O1 was reported. | The HAL publishes only the latest state, so intermediate states were not reported. Same causes as O6 → O1. | — |
-| O6 → O3 | Downstream loss | TO2 expired and re-activation reached O3 before O1/O2 were reported. | The HAL publishes only the latest state, so intermediate states were not reported. Same causes as O6 → O1. | — |
-| O6 → O4 | Re-ranging | Downstream recovered and the OLT sent a broadcast POPUP: ONU re-ranges (G.984.3). | PON-wide downstream interruption (OLT port / laser glitch, protection switch-over) affecting all ONUs on the port. | — |
-| O6 → O5 | Recovery | Downstream recovered before TO2 expired (directed POPUP in G.984.3, re-sync in G.989.3). ONU back in service with the same ONU-ID. | Short downstream glitch: connector disturbance, momentary optical power dip, OLT port glitch. Frequent O5 → O6 → O5 points to a marginal optical budget; check `XPON_ALARM_SD/SF`. | REGISTRATION |
-| O6 → O7 | OLT action | OLT disabled the serial number while downstream was interrupted. | Disable_Serial_Number (disable) from the OLT: rogue-ONU isolation, operator disable or subscriber suspension. | EMERGENCY_STOP |
-| O6 → O8 | Tuning | ONU tunes to the configured protection channel after the downstream loss. | NG-PON2 TWDM channel protection. | — |
-| O6 → O9 | Tuning | Protection-channel tuning, O8 not reported. | NG-PON2 TWDM channel protection. | — |
-| O7 → O1 | Recovery | OLT re-enabled the serial number (Disable_Serial_Number enable); activation restarts (G.987.3 / G.9807.1 / G.989.3). | Operator re-enabled the ONU, rogue condition cleared, subscriber reinstated. Also a reboot on implementations that don't persist O7. | EMERGENCY_STOP_CLEARED |
-| O7 → O2 | Recovery | OLT re-enabled the serial number; ONU returns to Standby (G.984.3). | Same as O7 → O1. | EMERGENCY_STOP_CLEARED |
-| O7 → O3 | Recovery | Re-enabled; re-activation reached O3 before O1/O2 were reported. | Same as O7 → O1. The HAL publishes only the latest state, so intermediate states were not reported. | EMERGENCY_STOP_CLEARED |
-| O7 → O4 | Recovery | Re-enabled; re-activation reached O4 before earlier states were reported. | Same as O7 → O1. The HAL publishes only the latest state, so intermediate states were not reported. | EMERGENCY_STOP_CLEARED |
-| O7 → O5 | Recovery | Re-enabled and fully re-activated between two reports; ONU in service. | Same as O7 → O1. The HAL publishes only the latest state, so intermediate states were not reported. | EMERGENCY_STOP_CLEARED, REGISTRATION |
-| O7 → O6 | Abnormal | Not a direct ITU-T transition. Re-enabled, re-activated and lost downstream again before O5 was reported. | Re-enable followed by an unstable downstream. | EMERGENCY_STOP_CLEARED, LOS |
-| O7 → O8 | Abnormal | Not a direct ITU-T transition. | The HAL publishes only the latest state, so intermediate states were not reported, or vendor-specific state reporting (NG-PON2 only). | EMERGENCY_STOP_CLEARED |
-| O7 → O9 | Abnormal | Not a direct ITU-T transition. | The HAL publishes only the latest state, so intermediate states were not reported, or vendor-specific state reporting (NG-PON2 only). | EMERGENCY_STOP_CLEARED |
-| O8 → O1 | Tuning failure | Downstream tuning failed: no sync on the target channel before the tuning timer expired. | Target channel not lit / not available, tunable receiver fault, wrong channel profile. | — |
-| O8 → O2 | Tuning failure | Tuning failed and re-activation started (O1 not reported). | See O8 → O1. The HAL publishes only the latest state, so intermediate states were not reported. | — |
-| O8 → O3 | Tuning failure | Tuning failed and re-activation started (O1/O2 not reported). | See O8 → O1. The HAL publishes only the latest state, so intermediate states were not reported. | — |
-| O8 → O4 | Tuning | Re-ranging on the new channel. | Vendor-specific: the OLT ranges the ONU again on the target channel. | — |
-| O8 → O5 | Tuning | Tuning complete; ONU in service on the new channel (no upstream tuning needed, or O9 not reported). | Normal end of a channel change. | REGISTRATION |
-| O8 → O6 | Abnormal | Not a direct ITU-T transition. Tuning completed and downstream was lost before O5 was reported. | Unstable downstream on the new channel. | LOS |
-| O8 → O7 | OLT action | OLT disabled the serial number during tuning. | Disable_Serial_Number (disable) from the OLT: rogue-ONU isolation, operator disable or subscriber suspension. | EMERGENCY_STOP |
-| O8 → O9 | Tuning | Downstream locked on the target channel; upstream tuning starts. | Normal channel-change step. | — |
-| O9 → O1 | Tuning failure | Upstream tuning failed (tuning timer expired) or downstream lost; full re-activation. | OLT doesn't see the ONU on the target upstream channel: tunable laser fault, wrong channel profile, upstream power too low. | — |
-| O9 → O2 | Tuning failure | Upstream tuning failed and re-activation started (O1 not reported). | See O9 → O1. The HAL publishes only the latest state, so intermediate states were not reported. | — |
-| O9 → O3 | Tuning failure | Upstream tuning failed and re-activation started (O1/O2 not reported). | See O9 → O1. The HAL publishes only the latest state, so intermediate states were not reported. | — |
-| O9 → O4 | Tuning | Re-ranging on the new upstream channel. | Vendor-specific: the OLT ranges the ONU again on the target channel. | — |
-| O9 → O5 | Tuning | Tuning complete; ONU in service on the new channel. | Normal end of a channel change. | REGISTRATION |
-| O9 → O6 | Abnormal | Not a direct ITU-T transition. Tuning completed and downstream was lost before O5 was reported. | Unstable downstream on the new channel. | LOS |
-| O9 → O7 | OLT action | OLT disabled the serial number during tuning. | Disable_Serial_Number (disable) from the OLT: rogue-ONU isolation, operator disable or subscriber suspension. | EMERGENCY_STOP |
-| O9 → O8 | Tuning | Upstream tuning rolled back to downstream tuning (retry or channel change aborted). | NG-PON2 tuning rollback / retry. | — |
+| Transition | Meaning | Possible reasons | Milestones |
+|---|---|---|---|
+| O1 → O2-3 | Downstream sync achieved and burst profile learned (O1.1 → O1.2 → O2-3). | Power-up / reboot, fibre reconnected, OLT port enabled, recovery after an outage. | DOWNSTREAM_SIGNAL_DETECTED |
+| O2-3 → O4 | Assign_ONU-ID received: the OLT discovered the serial number. | Normal activation step. | — |
+| O4 → O5 | Ranging_Time received; ONU in service. | Normal activation completed. | REGISTRATION |
+| O2-3 / O4 → O1 | Loss of downstream sync before activation completed. | Fibre cut, unplugged or dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault. | LOS |
+| O4 → O2-3 | TO1 expired during ranging, or Deactivate_ONU-ID received. ONU-ID discarded. | Ranging bursts not received (upstream power, ODN loss), ONU outside the ranging window, rogue ONU on the PON, registration ID rejected. Check `XPON_ALARM_SUF` and `XPON_ALARM_DACT`. | — |
+| O5 → O2-3 | Deactivate_ONU-ID received: OLT deregistered the ONU. | Registration ID or authentication rejected, operator deleted or re-provisioned the ONU, OLT detected excessive errors. Check `XPON_ALARM_DACT`. | DEREGISTRATION |
+| O5 → O6 | Loss of downstream sync in service; TO2 started. | Fibre cut, unplugged or dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault, OLT protection switch-over. Followed by O6 → O5 or O6 → O1. | LOS, DEREGISTRATION |
+| O6 → O5 | Downstream sync re-acquired before TO2 expired; ONU resumes by itself with the same ONU-ID and equalisation delay. | Short downstream glitch. Frequent O5 → O6 → O5 points to a marginal optical budget; check `XPON_ALARM_SD/SF`. | REGISTRATION |
+| O6 → O1 | TO2 expired; ONU-ID and equalisation delay discarded, full re-activation. | Sustained outage: fibre cut, OLT reboot, PON card down. | — |
+| O2-3 / O4 → O7 | Disable_Serial_Number (disable) received for this serial number. | Rogue-ONU isolation, operator disable, subscriber suspension, serial number blocked on the OLT. Check `XPON_ALARM_DIS`. | EMERGENCY_STOP |
+| O5 → O7 | Disable_Serial_Number (disable) received while in service; the ONU leaves service. | Rogue-ONU isolation, operator disable, subscriber suspension, serial number blocked on the OLT. Check `XPON_ALARM_DIS`. | DEREGISTRATION, EMERGENCY_STOP |
+| O7 → O1 | Disable_Serial_Number (enable) received; ONU restarts activation. | Operator re-enabled the ONU, rogue condition cleared, subscriber reinstated. | EMERGENCY_STOP_CLEARED |
 
-#### 2.6.3 Common Sequences
+> An ONU whose serial number the OLT doesn't accept stays in O2-3 indefinitely: there is no O2-3 timeout, so unlike GPON no repeating transition is reported. It shows up as a last `XPON_ONU_STATE_CHANGE` of `To=O2` (or `O3`) with no later O4.
 
-Read the `XPON_ONU_STATE_CHANGE` values in order (T2 `"use": "accumulate"`) to recognise these patterns:
+#### 2.6.6 Pairs Not Defined by the Standards
 
-| Sequence | Interpretation |
+The HAL pushes only the latest state. When several transitions happen between two pushes (fast activation, short outages), the intermediate states are not reported and the pair is one the standard doesn't define. Read such a pair as the shortest standard path between the two states:
+
+| Reported pair | Likely path / meaning |
 |---|---|
-| O1→O2→O3→O4→O5 | Normal activation. Time from leaving O1 to reaching O5 is the activation time. |
-| O2→O3→O2→O3… (never O4) | Serial number not accepted: ONU not provisioned on the OLT, wrong SN / password / registration ID, or SN bursts not received (upstream power, distance). |
-| …→O4→O2 repeating | Ranging fails: upstream optical budget, distance outside the ranging window, rogue ONU on the PON. Usually with `XPON_ALARM_SUF`. |
-| O4→O5→O2 shortly after | Authentication rejected after activation (password / registration ID / LOID). Usually with `XPON_ALARM_DACT`. |
-| O5→O6→O5 | Short downstream glitch, recovered within TO2. Frequent occurrences point to a marginal optical budget. |
-| O5→O6→O1→…→O5 | Downstream outage longer than TO2, followed by full re-activation. Correlate with `XPON_ALARM_LOS/LOF`. |
-| O5→O6→O4→O5 | PON-wide interruption; the OLT re-ranged all ONUs with a broadcast POPUP (G.984.3). |
-| O5→O2 / O3 | OLT deregistered the ONU (Deactivate_ONU-ID). Correlate with `XPON_ALARM_DACT`. |
-| O*x*→O7 … O7→O1 / O2 | OLT disabled and later re-enabled the serial number. Correlate with `XPON_ALARM_DIS`. |
-| O5→O8→O9→O5 | NG-PON2 wavelength-channel change completed. |
+| O1 → O3 / O4 / O5 (GPON); O1 → O4 / O5 (XGS-PON) | Activation steps not reported. Normal outcome. |
+| O1–O4 → O6 | ONU reached O5 and lost downstream before O5 was reported. Unstable downstream; check `XPON_ALARM_LOS/LOF`. |
+| O5 → O1 | O6 and TO2 expiry not reported (outage longer than TO2), or the vendor PON stack was reset. |
+| O5 → O3 (GPON) | Deactivate_ONU-ID (O5 → O2) followed by O2 → O3. See O5 → O2. |
+| O5 → O4 | GPON: O6 and broadcast POPUP not reported (PON-wide interruption). XGS-PON: Deactivate_ONU-ID and re-discovery not reported. |
+| O6 → O2 / O3 (both); O6 → O4 (XGS-PON) | TO2 expired and re-activation started before O1 was reported. Sustained outage. |
+| O1 → O7 | ONU disabled right after it announced its serial number, or Emergency Stop restored at boot by the vendor implementation. Rogue-ONU isolation, operator disable, subscriber suspension, serial number blocked on the OLT. Check `XPON_ALARM_DIS`. |
+| O7 → O3 / O4 / O5 (GPON); O7 → O2-3 / O4 / O5 (XGS-PON) | Re-enabled and re-activated before the earlier states were reported. |
+| O2 ↔ O3 (XGS-PON) | Both are O2-3. Vendor-internal sub-phase; no standard meaning. |
+| Any pair with O8 or O9 | NG-PON2 wavelength tuning; not expected on GPON or XGS-PON. Check the vendor HAL and `PonMode`. |
 
+Milestones for these pairs follow the rules above.
+
+#### 2.6.7 Common Sequences
+
+Read the `XPON_ONU_STATE_CHANGE` values in order (T2 `"use": "accumulate"`) and correlate with `XPON_ALARM_*` (§2.3):
+
+| Situation | GPON | XGS-PON |
+|---|---|---|
+| Normal activation | O1→O2→O3→O4→O5 | O1→O2 (or O3)→O4→O5 |
+| Serial number not accepted by the OLT | O2→O3→O2→O3… (never O4) | Stuck at O2 or O3, no further change |
+| Ranging fails | …→O4→O2 repeating, with `XPON_ALARM_SUF` | …→O4→O2/O3 repeating, with `XPON_ALARM_SUF` |
+| Rejected after activation (password / registration ID) | O4→O5→O2, with `XPON_ALARM_DACT` | O4→O5→O2/O3, with `XPON_ALARM_DACT` |
+| Short downstream glitch | O5→O6→O5 | O5→O6→O5 |
+| PON-wide interruption, OLT re-ranges all ONUs | O5→O6→O4→O5 | Not applicable (no POPUP) |
+| Outage longer than TO2 | O5→O6→O1→…→O5, with `XPON_ALARM_LOS/LOF` | O5→O6→O1→…→O5, with `XPON_ALARM_LOS/LOF` |
+| OLT deregistration | O5→O2, with `XPON_ALARM_DACT` | O5→O2/O3, with `XPON_ALARM_DACT` |
+| OLT disable / re-enable | O*x*→O7 … O7→O1/O2, with `XPON_ALARM_DIS` | O*x*→O7 … O7→O1, with `XPON_ALARM_DIS` |
 ### 2.7 Value Formats & Duplicate Suppression
 
 | Format | Value | Used by | T2 call |
