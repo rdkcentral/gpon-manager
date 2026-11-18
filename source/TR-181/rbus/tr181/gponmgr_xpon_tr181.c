@@ -21,7 +21,7 @@
 
 #define XPON_COUNT(array) (sizeof(array) / sizeof((array)[0]))
 #define XPON_BAD_VALUE    RBUS_ERROR_INVALID_RESPONSE_FROM_DESTINATION   /* HAL value outside the BBF range. */
-#define XPON_ANI          "Device.XPON.ONU.1.ANI.1."
+#define XPON_ANI          "Device.XPON.ONU.1.ANI.1." // Only single ONU and ANI considered for now.
 
 #ifndef XPON_CACHE_TTL_SEC
 #define XPON_CACHE_TTL_SEC 30       /* HAL query cache lifetime in seconds (EPON default); override with -D. */
