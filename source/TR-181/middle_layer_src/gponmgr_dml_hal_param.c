@@ -206,22 +206,22 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
     
     if( strstr(ParamName, "ModuleVendor"))
     {
-        strncpy(pPhyMedia->ModuleVendor,pValue,strlen(pValue)+1);
+        snprintf(pPhyMedia->ModuleVendor, sizeof(pPhyMedia->ModuleVendor), "%s", pValue);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "ModuleName"))
     {
-        strncpy(pPhyMedia->ModuleName,pValue,strlen(pValue)+1);
+        snprintf(pPhyMedia->ModuleName, sizeof(pPhyMedia->ModuleName), "%s", pValue);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "ModuleVersion"))
     {
-        strncpy(pPhyMedia->ModuleVersion, pValue,strlen(pValue)+1);
+        snprintf(pPhyMedia->ModuleVersion, sizeof(pPhyMedia->ModuleVersion), "%s", pValue);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "ModuleFirmwareVersion"))
     {
-        strncpy(pPhyMedia->ModuleFirmwareVersion, pValue,strlen(pValue)+1);
+        snprintf(pPhyMedia->ModuleFirmwareVersion, sizeof(pPhyMedia->ModuleFirmwareVersion), "%s", pValue);
         retStatus = ANSC_STATUS_SUCCESS;
     }
     else if( strstr(ParamName, "Cage"))
