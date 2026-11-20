@@ -37,7 +37,7 @@
 #include "gponmgr_xpon_rbus.h"
 
 #define HAL_CONNECTION_RETRY_MAX_COUNT 10
-#define HAL_INIT_DATA_RETRY_MAX_COUNT 120
+#define HAL_INIT_DATA_RETRY_MAX_COUNT 30
 #define HAL_INIT_DATA_RETRY_INTERVAL_SEC 1
 
 #define CHECK(expr)                                                \
