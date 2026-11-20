@@ -207,6 +207,7 @@ _DML_PHY_MEDIA
     CHAR                        ModuleVersion[256];
     CHAR                        ModuleFirmwareVersion[256];
     DML_PONMODE_ENUM            PonMode;
+    BOOLEAN                     PonModeValid;
     DML_CONNECTOR_ENUM          Connector;
     UINT                        NominalBitRateDownstream;
     UINT                        NominalBitRateUpstream;

@@ -37,6 +37,8 @@
 #include "gponmgr_xpon_rbus.h"
 
 #define HAL_CONNECTION_RETRY_MAX_COUNT 10
+#define HAL_INIT_DATA_RETRY_MAX_COUNT 120
+#define HAL_INIT_DATA_RETRY_INTERVAL_SEC 1
 
 #define CHECK(expr)                                                \
     if (!(expr))                                                   \
@@ -175,16 +177,23 @@ ANSC_STATUS GponHal_Init()
 }
 
 
-bool GponHal_check_data_initiliased(void)
+typedef enum
 {
-    bool data_initialised = FALSE;
+    HAL_INIT_DATA_PENDING,
+    HAL_INIT_DATA_READY,
+    HAL_INIT_DATA_WRONG_PON_MODE
+} HAL_INIT_DATA_STATE;
+
+static HAL_INIT_DATA_STATE GponHal_check_data_initiliased(void)
+{
+    HAL_INIT_DATA_STATE state = HAL_INIT_DATA_PENDING;
     int pm_idx = 0;
 
 
     GPON_DML_DATA* pGponDmlData = GponMgrDml_GetData_locked();
     if(pGponDmlData != NULL)
     {
-        for(pm_idx = 0; pm_idx < pGponDmlData->gpon.PhysicalMedia.ulQuantity; pm_idx++)
+        for(pm_idx = 0; pm_idx < GPON_DATA_MAX_PM; pm_idx++)
         {
             DML_PHY_MEDIA_CTRL_T* pGponData = pGponDmlData->gpon.PhysicalMedia.pdata[pm_idx];
             if(pGponData!= NULL)
@@ -192,36 +201,62 @@ bool GponHal_check_data_initiliased(void)
                 DML_PHY_MEDIA* pGponPhy = &(pGponData->dml);
                 if(strcmp(pGponPhy->ModuleVendor, ""))
                 {
-                    if(pGponPhy->PonMode == GPON)
+                    /* Module present: any ITU-T PON mode (GPON, XG-PON, XGS-PON, NG-PON2) is ready, anything else (e.g. EPON) is wrong. */
+                    if(pGponPhy->PonModeValid)
                     {
-                        data_initialised = TRUE;
+                        state = HAL_INIT_DATA_READY;
                         break;
                     }
+                    state = HAL_INIT_DATA_WRONG_PON_MODE;
                 }
             }
         }
 
         GponMgrDml_GetData_release(pGponDmlData);
     }
-    return data_initialised;
+    return state;
 }
 
 
 ANSC_STATUS GponHal_get_init_data(void)
 {
     ANSC_STATUS retStatus = ANSC_STATUS_FAILURE;
-    bool data_initialised = FALSE;
+    bool hal_read_ok = FALSE;
+    int attempt;
 
-    while(data_initialised != TRUE)
+    for(attempt = 0; attempt < HAL_INIT_DATA_RETRY_MAX_COUNT; attempt++)
     {
         retStatus = GponHal_get_data();
         if(retStatus == ANSC_STATUS_SUCCESS)
         {
-            data_initialised = GponHal_check_data_initiliased();
+            hal_read_ok = TRUE;
+            HAL_INIT_DATA_STATE state = GponHal_check_data_initiliased();
+            if(state == HAL_INIT_DATA_READY)
+            {
+                return ANSC_STATUS_SUCCESS;
+            }
+            if(state == HAL_INIT_DATA_WRONG_PON_MODE)
+            {
+                /* The module data is complete, so the mode will not change by retrying. */
+                CcspTraceError(("%s %d - Wrong PON mode reported by the HAL, expected GPON, XG-PON, XGS-PON or NG-PON2\n",
+                                __FUNCTION__, __LINE__));
+                return ANSC_STATUS_FAILURE;
+            }
         }
+        sleep(HAL_INIT_DATA_RETRY_INTERVAL_SEC);
     }
 
-    return retStatus;
+    if(hal_read_ok == TRUE)
+    {
+        /* The HAL answered but reported no module vendor yet; the data is refreshed on later reads. */
+        CcspTraceWarning(("%s %d - Physical media data not populated after %d attempts, continuing\n",
+                          __FUNCTION__, __LINE__, HAL_INIT_DATA_RETRY_MAX_COUNT));
+        return ANSC_STATUS_SUCCESS;
+    }
+
+    CcspTraceError(("%s %d - Failed to read HAL data after %d attempts\n",
+                    __FUNCTION__, __LINE__, HAL_INIT_DATA_RETRY_MAX_COUNT));
+    return ANSC_STATUS_FAILURE;
 }
 
 

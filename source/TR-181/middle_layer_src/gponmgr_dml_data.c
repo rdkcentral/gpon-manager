@@ -156,6 +156,7 @@ void GponMgrDml_SetDefaultPhyMedia(DML_PHY_MEDIA_CTRL_T* gponPhyMediaData)
         memset(gponPhyMedia->ModuleVersion, 0, 256);
         memset(gponPhyMedia->ModuleFirmwareVersion, 0, 256);
         gponPhyMedia->PonMode = GPON;
+        gponPhyMedia->PonModeValid = false;
         gponPhyMedia->Connector = LC;
         gponPhyMedia->NominalBitRateDownstream = 0;
         gponPhyMedia->NominalBitRateUpstream = 0;

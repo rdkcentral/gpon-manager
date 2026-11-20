@@ -156,6 +156,11 @@ ANSC_STATUS Map_hal_dml_alarm(DML_ALARM* pGponAlarm, char* ParamName, char* pVal
         pGponAlarm->ROGUE = strstr(pValue, "Active")?ACTIVE:INACTIVE;
         retStatus = ANSC_STATUS_SUCCESS;
     }
+    else if (strstr(ParamName, "LODS"))
+    {
+        /* Reported by the unified HAL; no DML field yet. */
+        retStatus = ANSC_STATUS_SUCCESS;
+    }
     
     if(retStatus == ANSC_STATUS_FAILURE)
     {
@@ -254,6 +259,9 @@ ANSC_STATUS Map_hal_dml_pm(DML_PHY_MEDIA_LIST_T* gponPhyList, char* ParamName, c
             pPhyMedia->PonMode = NGPON2;
             retStatus = ANSC_STATUS_SUCCESS;
         }
+
+        /* PonModeValid is true only for a recognised ITU-T mode; PonMode keeps its previous value otherwise. */
+        pPhyMedia->PonModeValid = (retStatus == ANSC_STATUS_SUCCESS);
 
         /* All ITU-T PON modes are valid; only an IEEE EPON module is a wrong PON mode.
          * PonMode has no HAL event, so this is a poll failure (rejected polled value).
@@ -870,6 +878,12 @@ ANSC_STATUS Map_hal_dml_gem(DML_GEM_LIST_T* gponGemList,char* ParamName, char* p
                 retStatus = ANSC_STATUS_SUCCESS;
             }
         }
+    }
+    else if (strstr(ParamName, "AllocId") || strstr(ParamName, "Type") ||
+             strstr(ParamName, "PayloadBytes") || strstr(ParamName, "EncryptionKeyErrors"))
+    {
+        /* Reported by the unified HAL; no DML field yet. */
+        retStatus = ANSC_STATUS_SUCCESS;
     }
     
     if(retStatus == ANSC_STATUS_SUCCESS)
