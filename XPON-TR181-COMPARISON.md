@@ -11,6 +11,7 @@ Sources: [config/RdkGponManager.xml](config/RdkGponManager.xml), [tr-181-2-21-0-
 - Full data model paths are used. Each `{i}` is an independent instance; instance numbers cannot be assumed to match between models.
 - The inventory includes **135 BBF parameters** and **95 RDK parameters**. Five RDK parameters require `WAN_MANAGER_UNIFICATION_ENABLED`; without it, this XML exposes 90 parameters.
 - A match means corresponding information is defined in both XML trees. It does **not** prove runtime support, identical units, or complete BBF compliance. Conversion and verification requirements remain in the descriptions.
+- For what GPON Manager actually serves on `Device.XPON` at run time, including parameters with no RDK match that are filled from constants, the JSON-HAL connection state or Linux sysfs, see [docs/08_TR181_Telemetry_Reference.md](docs/08_TR181_Telemetry_Reference.md) §1.1 and Appendix A.
 
 ## Color Key
 

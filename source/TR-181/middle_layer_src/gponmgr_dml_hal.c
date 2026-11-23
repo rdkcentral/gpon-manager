@@ -586,6 +586,8 @@ void eventcb_PhysicalMediaStatus(const char *msg, const int len)
 
                 //update data
                 ret = Map_hal_dml_pm(pGponPhyList, event_name, event_val);
+                if(ret == ANSC_STATUS_SUCCESS)
+                    GponMgrXponTr181_InvalidateCache();     /* PhysicalMedia status changed: drop cached XPON HAL data. */
 
                 //release data
                 GponMgrDml_GetData_release(pGponDmlData);
@@ -634,6 +636,9 @@ void eventcb_PhysicalMediaAlarmsAll(const char *msg, const int len)
 
                 //update data
                 ret = Map_hal_dml_pm(pGponPhyList, event_name, event_val);
+
+                if(ret == ANSC_STATUS_SUCCESS)
+                    GponMgrXponTr181_InvalidateCache();     /* PhysicalMedia alarm changed: drop cached XPON HAL data. */
 
                 if(telem_valid && ret == ANSC_STATUS_SUCCESS)
                 {

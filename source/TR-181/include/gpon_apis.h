@@ -367,6 +367,7 @@ _DML_VEIP
     ULONG              MeId;
     DML_LOCK_ENUM      AdministrativeState;
     DML_OPERSTATE_ENUM OperationalState;
+    ULONG              LastChangeTime;      /* CLOCK_MONOTONIC seconds of the last OperationalState change (or row creation). */
     CHAR               InterDomainName[25];
     CHAR               InterfaceName[256];
     DML_VEIP_ETHFLOW   EthernetFlow;

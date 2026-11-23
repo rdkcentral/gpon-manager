@@ -1025,6 +1025,8 @@ ANSC_STATUS Map_hal_dml_veip(DML_VEIP_LIST_T* gponVeipList, char* ParamName, cha
     }
     else if (strstr(ParamName, "OperationalState"))
     {
+        DML_OPERSTATE_ENUM previous = pVeip->OperationalState;
+
         //Up(0),Down(1),Unknown(2),Dormant(3),NotPresent(4),LowerLayerDown(5),Error(6)
         if(strstr(pValue,"LowerLayerDown"))
         {
@@ -1061,6 +1063,9 @@ ANSC_STATUS Map_hal_dml_veip(DML_VEIP_LIST_T* gponVeipList, char* ParamName, cha
             pVeip->OperationalState = veip_Up;
             retStatus = ANSC_STATUS_SUCCESS;
         }
+        /* Backs Device.XPON...EthernetUNI.{i}.LastChange; both HAL polls and push events pass through here. */
+        if (pVeip->OperationalState != previous)
+            pVeip->LastChangeTime = GponMgrDml_GetMonotonicSeconds();
     }
     else if (strstr(ParamName, "InterDomainName"))
     {

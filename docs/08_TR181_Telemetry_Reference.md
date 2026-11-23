@@ -1,6 +1,6 @@
 # 08 — GPON Manager TR-181 & Telemetry Reference
 
-**Document:** 08 | **Version:** 1.2 | **Date:** October 29, 2026 | **Component:** RDK GPON Manager (`rdkgponmanager`)
+**Document:** 08 | **Version:** 1.3 | **Date:** October 29, 2026 | **Component:** RDK GPON Manager (`rdkgponmanager`)
 
 > An HTML version of this document with the same content, styled for printing, is in [08_TR181_Telemetry_Reference.html](08_TR181_Telemetry_Reference.html).
 
@@ -57,7 +57,11 @@ GPON Manager exposes the standard BBF `Device.XPON` model and the RDK `Device.X_
 
 ### 1.1 `Device.XPON` (BBF TR-181 2.21) — Supported Parameters
 
-Registered as an RBUS provider by `source/TR-181/rbus/tr181/gponmgr_xpon_tr181.c` (`GponMgrXponRbus_Init()`), which registers the complete BBF 2.21 `Device.XPON` tree. 66 of the 135 registered parameters are backed by GPON data, as listed below. The other 69 return `RBUS_ERROR_INVALID_OPERATION`; see Appendix A. The *X_RDK_ONT Equivalent* column names the backing RDK parameter; the full mapping is in Appendix B.
+Registered as an RBUS provider by `source/TR-181/rbus/tr181/gponmgr_xpon_tr181.c` (`GponMgrXponRbus_Init()`), which registers the complete BBF 2.21 `Device.XPON` tree. 89 of the 135 registered parameters are supported, as listed below. The other 46 return `RBUS_ERROR_INVALID_OPERATION`; see Appendix A. The *X_RDK_ONT Equivalent* column names the backing RDK parameter; the full mapping is in Appendix B.
+
+> **Data sources:** each description ends with **Source:**, which says where the value is read: *HAL* (`Device.X_RDK_ONT.*` through the JSON-HAL client, cached per table for `XPON_CACHE_TTL_SEC`, default 30 s), *Linux sysfs* (`/sys/class/net/<if>/statistics/*`, read on every get), the *JSON-HAL client connection state*, a *constant* in GPON Manager, or a value *computed by GPON Manager* from HAL data.
+
+> **Read-only deviations:** `ONU.{i}.Enable`, `ANI.{i}.Enable`, `EthernetUNI.{i}.Alias`, `EthernetUNI.{i}.Description`, `EthernetUNI.{i}.LowerLayers` and `ANI.{i}.Alias` are writable in BBF but read-only here; a set returns `RBUS_ERROR_NOT_WRITABLE`.
 
 > **Instances:** only `ONU.1` and `ANI.1` exist. `EthernetUNI.{i}`, `ANI.1.Transceiver.{i}` and `TC.GEM.Port.{i}` follow the populated `Veip`, `PhysicalMedia` and `Gem` rows. ANI-level PhysicalMedia fields need exactly one active PhysicalMedia row. Values are passed through without unit conversion (BBF units: power 0.1 dBm, voltage mV, bias µA, temperature °C, bit rate kbps).
 
@@ -65,107 +69,130 @@ Registered as an RBUS provider by `source/TR-181/rbus/tr181/gponmgr_xpon_tr181.c
 
 | # | TR-181 Parameter | Description | X_RDK_ONT Equivalent | Data Type | Access |
 |---|---|---|---|---|---|
-| 1 | `Device.XPON.ONUNumberOfEntries` | Number of entries in the `ONU` table. *Always 1.* | `constant` | unsignedInt | Read-Only |
-| 2 | `Device.XPON.ONU.{i}.SoftwareImageNumberOfEntries` | Number of entries in the `SoftwareImage` table. *Always 0 — no software-image rows are registered.* | `constant` | unsignedInt | Read-Only |
-| 3 | `Device.XPON.ONU.{i}.EthernetUNINumberOfEntries` | Number of entries in the `EthernetUNI` table. *Number of populated `Veip.{i}` rows.* | `Veip table` | unsignedInt | Read-Only |
-| 4 | `Device.XPON.ONU.{i}.ANINumberOfEntries` | Number of entries in the `ANI` table. *Always 1.* | `constant` | unsignedInt | Read-Only |
-| 5 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Enable` | Indicates whether this interface is enabled or not. *Unlock* → true, *Lock* → false. **Telemetry:** Every change of the backing OMCI AdministrativeState raises `XPON_INTF_ADMIN_LOCK` / `_UNLOCK` (§2.2). | `Veip.{i}.AdministrativeState` | boolean | Read-Only |
-| 6 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Status` | The current operational state of the interface. *Same enumeration.* **Telemetry:** *Up*/*Down* drives the VEIP link state machine and the `XPON_INTF_LINK_*` / `XPON_PHY_STATUS_*` events (§2.2). | `Veip.{i}.OperationalState` | string | Read-Only |
-| 7 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Name` | The textual name of the interface as assigned by the CPE. *Get fails if longer than 64 characters.* **Telemetry:** Carried as `Interface=<name>` in `XPON_INTF_LINK_*` (§2.2). | `Veip.{i}.InterfaceName` | string | Read-Only |
-| 8 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.ANIs` | References all associated ANI interfaces. *Always `Device.XPON.ONU.1.ANI.1`.* | `constant` | `list<string>` | Read-Only |
-| 9 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainID` | String to identify the associated service in the ONU management domain to the TR-181 management domain. *Formatted as `(VEIP,<MeId>)`.* | `Veip.{i}.MeId` | string | Read-Only |
-| 10 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainName` | String that provides an additional way to identify the associated service to the TR-181 management domain. | `Veip.{i}.InterDomainName` | string | Read-Only |
+| 1 | `Device.XPON.ONUNumberOfEntries` | Number of entries in the `ONU` table. *Always 1.* **Source:** constant in GPON Manager. | `constant` | unsignedInt | Read-Only |
+| 2 | `Device.XPON.ONU.{i}.SoftwareImageNumberOfEntries` | Number of entries in the `SoftwareImage` table. *Always 0 — no software-image rows are registered.* **Source:** constant in GPON Manager. | `constant` | unsignedInt | Read-Only |
+| 3 | `Device.XPON.ONU.{i}.EthernetUNINumberOfEntries` | Number of entries in the `EthernetUNI` table. *Number of populated `Veip.{i}` rows.* **Source:** HAL — number of `Device.X_RDK_ONT.Veip.{i}` rows. | `Veip table` | unsignedInt | Read-Only |
+| 4 | `Device.XPON.ONU.{i}.ANINumberOfEntries` | Number of entries in the `ANI` table. *Always 1.* **Source:** constant in GPON Manager. | `constant` | unsignedInt | Read-Only |
+| 5 | `Device.XPON.ONU.{i}.Enable` | Enables or disables this ONU. *Read-only in GPON Manager (BBF: Read/Write): `true` while the JSON-HAL client is connected to the vendor HAL server, otherwise `false`. A set returns `RBUS_ERROR_NOT_WRITABLE`.* **Source:** JSON-HAL client connection state (`json_hal_is_client_connected()`). | `JSON-HAL client` | boolean | Read-Only |
+| 6 | `Device.XPON.ONU.{i}.Name` | The textual name of the ONU as assigned by the CPE. *Always `ONU<i>`.* **Source:** constant in GPON Manager. | `constant` | string | Read-Only |
+| 7 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Enable` | Indicates whether this interface is enabled or not. *Unlock* → true, *Lock* → false. **Telemetry:** Every change of the backing OMCI AdministrativeState raises `XPON_INTF_ADMIN_LOCK` / `_UNLOCK` (§2.2). **Source:** HAL `Device.X_RDK_ONT.Veip.{i}.AdministrativeState`. | `Veip.{i}.AdministrativeState` | boolean | Read-Only |
+| 8 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Status` | The current operational state of the interface. *Same enumeration.* **Telemetry:** *Up*/*Down* drives the VEIP link state machine and the `XPON_INTF_LINK_*` / `XPON_PHY_STATUS_*` events (§2.2). **Source:** HAL `Device.X_RDK_ONT.Veip.{i}.OperationalState`. | `Veip.{i}.OperationalState` | string | Read-Only |
+| 9 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Name` | The textual name of the interface as assigned by the CPE. *Get fails if longer than 64 characters.* **Telemetry:** Carried as `Interface=<name>` in `XPON_INTF_LINK_*` (§2.2). **Source:** HAL `Device.X_RDK_ONT.Veip.{i}.InterfaceName`. | `Veip.{i}.InterfaceName` | string | Read-Only |
+| 10 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.ANIs` | References all associated ANI interfaces. *Always `Device.XPON.ONU.1.ANI.1`.* **Source:** constant in GPON Manager. | `constant` | `list<string>` | Read-Only |
+| 11 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainID` | String to identify the associated service in the ONU management domain to the TR-181 management domain. *Formatted as `(VEIP,<MeId>)`.* **Source:** HAL `Device.X_RDK_ONT.Veip.{i}.MeId`. | `Veip.{i}.MeId` | string | Read-Only |
+| 12 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainName` | String that provides an additional way to identify the associated service to the TR-181 management domain. **Source:** HAL `Device.X_RDK_ONT.Veip.{i}.InterDomainName`. | `Veip.{i}.InterDomainName` | string | Read-Only |
+| 13 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Alias` | Unique, non-volatile alias for this instance. *`cpe-` + upper-case `Veip.{i}.InterfaceName`; `cpe-VEIP<i>` if the name is empty. Get fails if longer than 64 characters. Read-only (BBF: Read/Write). A set returns `RBUS_ERROR_NOT_WRITABLE`.* **Source:** computed by GPON Manager from HAL `Device.X_RDK_ONT.Veip.{i}.InterfaceName`. | `Veip.{i}.InterfaceName` | _AliasCWMP | Read-Only |
+| 14 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Description` | A user-friendly description of the interface. *`GPON VEIP WAN interface <Alias>`. Read-only (BBF: Read/Write). A set returns `RBUS_ERROR_NOT_WRITABLE`.* **Source:** computed by GPON Manager from `Alias` (HAL `Device.X_RDK_ONT.Veip.{i}.InterfaceName`). | `Veip.{i}.InterfaceName` | string | Read-Only |
+| 15 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.LastChange` | The accumulated time in seconds since the interface entered its current operational state. *Seconds since `Status` last changed, or since the row was created. Starts again from 0 when GPON Manager restarts.* **Source:** computed by GPON Manager: a `CLOCK_MONOTONIC` timestamp is taken whenever HAL `Device.X_RDK_ONT.Veip.{i}.OperationalState` changes (poll or push event). | `Veip.{i}.OperationalState` | unsignedInt | Read-Only |
+| 16 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.LowerLayers` | Comma-separated list of references to the interface objects stacked immediately below this one. *Always empty: BBF expects `LowerLayers` not to be used for EthernetUNI. Read-only (BBF: Read/Write). A set returns `RBUS_ERROR_NOT_WRITABLE`.* **Source:** constant in GPON Manager. | `constant` | `list<string>` | Read-Only |
+| 17 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Upstream` | Indicates whether the interface points towards the Internet (`true`) or towards End Devices (`false`). *Always `true`: the VEIP is the gateway WAN interface.* **Source:** constant in GPON Manager. | `constant` | boolean | Read-Only |
+| 18 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesSent` | The total number of bytes transmitted out of the interface, including framing characters. *Read from the VEIP Linux network interface.* **Source:** Linux sysfs `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/tx_bytes`. | `sysfs` | StatsCounter64 | Read-Only |
+| 19 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesReceived` | The total number of bytes received on the interface, including framing characters. *Read from the VEIP Linux network interface.* **Source:** Linux sysfs `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/rx_bytes`. | `sysfs` | StatsCounter64 | Read-Only |
+| 20 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsSent` | The total number of packets transmitted out of the interface. *Read from the VEIP Linux network interface.* **Source:** Linux sysfs `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/tx_packets`. | `sysfs` | StatsCounter64 | Read-Only |
+| 21 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsReceived` | The total number of packets received on the interface. *Read from the VEIP Linux network interface.* **Source:** Linux sysfs `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/rx_packets`. | `sysfs` | StatsCounter64 | Read-Only |
+| 22 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsSent` | The total number of outbound packets that could not be transmitted because of errors. *Read from the VEIP Linux network interface; truncated to 32 bits, so it wraps.* **Source:** Linux sysfs `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/tx_errors`. | `sysfs` | StatsCounter32 | Read-Only |
+| 23 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsReceived` | The total number of inbound packets that contained errors preventing them from being delivered to a higher-layer protocol. *Read from the VEIP Linux network interface; truncated to 32 bits, so it wraps.* **Source:** Linux sysfs `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/rx_errors`. | `sysfs` | StatsCounter32 | Read-Only |
+| 24 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsSent` | The total number of outbound packets which were chosen to be discarded even though no errors had been detected to prevent their being transmitted. *Read from the VEIP Linux network interface; truncated to 32 bits, so it wraps.* **Source:** Linux sysfs `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/tx_dropped`. | `sysfs` | StatsCounter32 | Read-Only |
+| 25 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsReceived` | The total number of inbound packets which were chosen to be discarded even though no errors had been detected to prevent their being delivered. *Read from the VEIP Linux network interface; truncated to 32 bits, so it wraps.* **Source:** Linux sysfs `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/rx_dropped`. | `sysfs` | StatsCounter32 | Read-Only |
+| 26 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.MulticastPacketsReceived` | The total number of received packets, delivered by this layer to a higher layer, which were addressed to a multicast address at this layer. *Read from the VEIP Linux network interface.* **Source:** Linux sysfs `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/multicast`. | `sysfs` | StatsCounter64 | Read-Only |
 
 #### 1.1.2 ANI
 
 | # | TR-181 Parameter | Description | X_RDK_ONT Equivalent | Data Type | Access |
 |---|---|---|---|---|---|
-| 11 | `Device.XPON.ONU.{i}.ANI.{i}.Enable` | Enables or disables the interface. If disabled, the device should force the ONU state of this ANI to O1 (Initial state). | `PhysicalMedia.{i}.Enable` | boolean | Read/Write |
-| 12 | `Device.XPON.ONU.{i}.ANI.{i}.Status` | The current operational state of the interface. *Uses the uniquely active PhysicalMedia row.* | `PhysicalMedia.{i}.Status` | string | Read-Only |
-| 13 | `Device.XPON.ONU.{i}.ANI.{i}.Alias` | Unique, non-volatile alias for this instance. | `PhysicalMedia.{i}.Alias` | _AliasCWMP | Read/Write |
-| 14 | `Device.XPON.ONU.{i}.ANI.{i}.LastChange` | The accumulated time in seconds since the interface entered its current operational state. | `PhysicalMedia.{i}.LastChange` | unsignedInt | Read-Only |
-| 15 | `Device.XPON.ONU.{i}.ANI.{i}.TransceiverNumberOfEntries` | Number of entries in the `Transceiver` table. *Number of populated PhysicalMedia rows.* | `PhysicalMedia table` | unsignedInt | Read-Only |
+| 27 | `Device.XPON.ONU.{i}.ANI.{i}.Enable` | Enables or disables the interface. If disabled, the device should force the ONU state of this ANI to O1 (Initial state). *Read-only in GPON Manager (BBF: R/W) because writing false would switch the PON link off; a set returns `RBUS_ERROR_NOT_WRITABLE`.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Enable`. | `PhysicalMedia.{i}.Enable` | boolean | Read-Only |
+| 28 | `Device.XPON.ONU.{i}.ANI.{i}.Status` | The current operational state of the interface. *Uses the uniquely active PhysicalMedia row.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Status`. | `PhysicalMedia.{i}.Status` | string | Read-Only |
+| 29 | `Device.XPON.ONU.{i}.ANI.{i}.Alias` | Unique, non-volatile alias for this instance. *Read-only in GPON Manager (BBF: writeOnceReadOnly); a set returns `RBUS_ERROR_NOT_WRITABLE`.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alias`. | `PhysicalMedia.{i}.Alias` | _AliasCWMP | Read-Only |
+| 30 | `Device.XPON.ONU.{i}.ANI.{i}.LastChange` | The accumulated time in seconds since the interface entered its current operational state. **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.LastChange`. | `PhysicalMedia.{i}.LastChange` | unsignedInt | Read-Only |
+| 31 | `Device.XPON.ONU.{i}.ANI.{i}.TransceiverNumberOfEntries` | Number of entries in the `Transceiver` table. *Number of populated PhysicalMedia rows.* **Source:** HAL — number of `Device.X_RDK_ONT.PhysicalMedia.{i}` rows. | `PhysicalMedia table` | unsignedInt | Read-Only |
+| 32 | `Device.XPON.ONU.{i}.ANI.{i}.Name` | The textual name of the ANI entry as assigned by the CPE. *Always `ANI<i>`.* **Source:** constant in GPON Manager. | `constant` | string | Read-Only |
+| 33 | `Device.XPON.ONU.{i}.ANI.{i}.PONMode` | PON mode, defines the detected or configured PON mode of the ANI. *Same mapping as `Transceiver.{i}.PONMode`, from the uniquely active PhysicalMedia row; `Unknown` if there is no unique active row or the HAL reports `PonModeValid` = false.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.PonMode` / `PonModeValid`. | `PhysicalMedia.{i}.PonMode` | string | Read-Only |
+| 34 | `Device.XPON.ONU.{i}.ANI.{i}.SFPReferenceList` | Small-form Factor Pluggable (SFP) entries associated with this interface. *Always empty: `Device.SFPs.SFPCage.{i}` is not implemented on this platform.* **Source:** constant in GPON Manager. | `constant` | `list<string>` | Read-Only |
 
 #### 1.1.3 ANI.TC — ONU Activation
 
 | # | TR-181 Parameter | Description | X_RDK_ONT Equivalent | Data Type | Access |
 |---|---|---|---|---|---|
-| 16 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUState` | ONU activation state. *O1–O9 (the BBF combined O2-3* value is never reported). **Telemetry:** Every change raises `XPON_ONU_STATE_CHANGE` (`From=O<a>,To=O<b>`). Milestone transitions (leaving O1, falling back to O1, entering O6/O7, leaving O7, entering/leaving O5) also raise the specific `XPON_ONU_*` events (§2.1, mapping in §2.6). | `Ploam.RegistrationState` | string | Read-Only |
-| 17 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.VendorID` | Identifies the vendor of the ONU. *Get fails if longer than 4 characters.* | `Ploam.VendorId` | string | Read-Only |
-| 18 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.SerialNumber` | Represents the combination of the Vendor-ID and the Vendor-specific serial number (VSSN). *Get fails if not a valid 12-character (or 16 hex digit) serial.* | `Ploam.SerialNumber` | string | Read-Only |
-| 19 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUID` | Identifier that the OLT assigns to this ANI during the activation. | `Ploam.OnuId` | unsignedInt | Read-Only |
+| 35 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUState` | ONU activation state. *O1–O9 (the BBF combined O2-3* value is never reported). **Telemetry:** Every change raises `XPON_ONU_STATE_CHANGE` (`From=O<a>,To=O<b>`). Milestone transitions (leaving O1, falling back to O1, entering O6/O7, leaving O7, entering/leaving O5) also raise the specific `XPON_ONU_*` events (§2.1, mapping in §2.6). **Source:** HAL `Device.X_RDK_ONT.Ploam.RegistrationState`. | `Ploam.RegistrationState` | string | Read-Only |
+| 36 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.VendorID` | Identifies the vendor of the ONU. *Get fails if longer than 4 characters.* **Source:** HAL `Device.X_RDK_ONT.Ploam.VendorId`. | `Ploam.VendorId` | string | Read-Only |
+| 37 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.SerialNumber` | Represents the combination of the Vendor-ID and the Vendor-specific serial number (VSSN). *Get fails if not a valid 12-character (or 16 hex digit) serial.* **Source:** HAL `Device.X_RDK_ONT.Ploam.SerialNumber`. | `Ploam.SerialNumber` | string | Read-Only |
+| 38 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUID` | Identifier that the OLT assigns to this ANI during the activation. **Source:** HAL `Device.X_RDK_ONT.Ploam.OnuId`. | `Ploam.OnuId` | unsignedInt | Read-Only |
 
 #### 1.1.4 ANI.TC — Performance Monitoring (PHY / GEM / PLOAM / OMCI)
 
 | # | TR-181 Parameter | Description | X_RDK_ONT Equivalent | Data Type | Access |
 |---|---|---|---|---|---|
-| 20 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.CorrectedFECBytes` | The number of bytes that were corrected by the FEC function. | `Gtc.CorrectedFecBytes` | StatsCounter64 | Read-Only |
-| 21 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.CorrectedFECCodewords` | Count of FEC codewords that contained errors but were corrected by the FEC function. | `Gtc.CorrectedFecCodeWords` | StatsCounter64 | Read-Only |
-| 22 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.UncorrectableFECCodewords` | Count of FEC codewords that contained errors and could not be corrected by the FEC function. | `Gtc.UnCorrectedFecCodeWords` | StatsCounter64 | Read-Only |
-| 23 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.TotalFECCodewords` | Count of total received FEC codewords. | `Gtc.TotalFecCodeWords` | StatsCounter64 | Read-Only |
-| 24 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.PSBdHECErrorCount` | HEC error in any of the fields of PSBd. | `Gtc.PSBdHecErrors` | StatsCounter32 | Read-Only |
-| 25 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.HeaderHECErrorCount` | HEC errors received in the DS XGTC or FS header. *Mapping is a best match (see `XPON-TR181-MAPPING.md`).* | `Gtc.HecErrorCount` | StatsCounter32 | Read-Only |
-| 26 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FrameHeaderHECErrors` | XGEM frame header HEC errors. Number of events involving loss of XGEM channel delineation. *Mapping is a best match (see `XPON-TR181-MAPPING.md`).* | `Gtc.FrameHecErrors` | StatsCounter32 | Read-Only |
-| 27 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.MICErrors` | PLOAM MIC errors. Counter of received PLOAM messages with MIC errors. | `Ploam.MicErrors` | StatsCounter32 | Read-Only |
-| 28 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.DownstreamMessageCount` | Downstream PLOAM message count. Count of PLOAM messages sent by OLT, received by ONU, either broadcast or directed to the specific ONU-ID. | `Ploam.RxMessageCount` | StatsCounter64 | Read-Only |
-| 29 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.UpstreamMessageCount` | Upstream PLOAM message count. Count of messages (other than Acknowledgement) sent by ONU to OLT. | `Ploam.TxMessageCount` | StatsCounter64 | Read-Only |
-| 30 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.BaselineMessagesReceived` | OMCI baseline message count. | `Omci.RxBaseLineMessageCountValid` | StatsCounter64 | Read-Only |
-| 31 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.ExtendedMessagesReceived` | OMCI extended message count. | `Omci.RxExtendedMessageCountValid` | StatsCounter64 | Read-Only |
-| 32 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.MICErrors` | Count of received OMCI messages with MIC errors. | `Omci.MicErrors` | StatsCounter32 | Read-Only |
+| 39 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.CorrectedFECBytes` | The number of bytes that were corrected by the FEC function. **Source:** HAL `Device.X_RDK_ONT.Gtc.CorrectedFecBytes`. | `Gtc.CorrectedFecBytes` | StatsCounter64 | Read-Only |
+| 40 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.CorrectedFECCodewords` | Count of FEC codewords that contained errors but were corrected by the FEC function. **Source:** HAL `Device.X_RDK_ONT.Gtc.CorrectedFecCodeWords`. | `Gtc.CorrectedFecCodeWords` | StatsCounter64 | Read-Only |
+| 41 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.UncorrectableFECCodewords` | Count of FEC codewords that contained errors and could not be corrected by the FEC function. **Source:** HAL `Device.X_RDK_ONT.Gtc.UnCorrectedFecCodeWords`. | `Gtc.UnCorrectedFecCodeWords` | StatsCounter64 | Read-Only |
+| 42 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.TotalFECCodewords` | Count of total received FEC codewords. **Source:** HAL `Device.X_RDK_ONT.Gtc.TotalFecCodeWords`. | `Gtc.TotalFecCodeWords` | StatsCounter64 | Read-Only |
+| 43 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.PSBdHECErrorCount` | HEC error in any of the fields of PSBd. **Source:** HAL `Device.X_RDK_ONT.Gtc.PSBdHecErrors`. | `Gtc.PSBdHecErrors` | StatsCounter32 | Read-Only |
+| 44 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.HeaderHECErrorCount` | HEC errors received in the DS XGTC or FS header. *Mapping is a best match (see `XPON-TR181-MAPPING.md`).* **Source:** HAL `Device.X_RDK_ONT.Gtc.HecErrorCount`. | `Gtc.HecErrorCount` | StatsCounter32 | Read-Only |
+| 45 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FrameHeaderHECErrors` | XGEM frame header HEC errors. Number of events involving loss of XGEM channel delineation. *Mapping is a best match (see `XPON-TR181-MAPPING.md`).* **Source:** HAL `Device.X_RDK_ONT.Gtc.FrameHecErrors`. | `Gtc.FrameHecErrors` | StatsCounter32 | Read-Only |
+| 46 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesSent` | Total number of (X)GEM frames transmitted. *Sum over all GEM ports.* **Source:** computed by GPON Manager as Σ HAL `Device.X_RDK_ONT.Gem.{i}.TransmittedFrames`. | `Σ Gem.{i}.TransmittedFrames` | StatsCounter64 | Read-Only |
+| 47 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesReceived` | Total number of (X)GEM frames received. *Sum over all GEM ports.* **Source:** computed by GPON Manager as Σ HAL `Device.X_RDK_ONT.Gem.{i}.ReceivedFrames`. | `Σ Gem.{i}.ReceivedFrames` | StatsCounter64 | Read-Only |
+| 48 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.MICErrors` | PLOAM MIC errors. Counter of received PLOAM messages with MIC errors. **Source:** HAL `Device.X_RDK_ONT.Ploam.MicErrors`. | `Ploam.MicErrors` | StatsCounter32 | Read-Only |
+| 49 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.DownstreamMessageCount` | Downstream PLOAM message count. Count of PLOAM messages sent by OLT, received by ONU, either broadcast or directed to the specific ONU-ID. **Source:** HAL `Device.X_RDK_ONT.Ploam.RxMessageCount`. | `Ploam.RxMessageCount` | StatsCounter64 | Read-Only |
+| 50 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.UpstreamMessageCount` | Upstream PLOAM message count. Count of messages (other than Acknowledgement) sent by ONU to OLT. **Source:** HAL `Device.X_RDK_ONT.Ploam.TxMessageCount`. | `Ploam.TxMessageCount` | StatsCounter64 | Read-Only |
+| 51 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.BaselineMessagesReceived` | OMCI baseline message count. **Source:** HAL `Device.X_RDK_ONT.Omci.RxBaseLineMessageCountValid`. | `Omci.RxBaseLineMessageCountValid` | StatsCounter64 | Read-Only |
+| 52 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.ExtendedMessagesReceived` | OMCI extended message count. **Source:** HAL `Device.X_RDK_ONT.Omci.RxExtendedMessageCountValid`. | `Omci.RxExtendedMessageCountValid` | StatsCounter64 | Read-Only |
+| 53 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.MICErrors` | Count of received OMCI messages with MIC errors. **Source:** HAL `Device.X_RDK_ONT.Omci.MicErrors`. | `Omci.MicErrors` | StatsCounter32 | Read-Only |
 
 #### 1.1.5 ANI.TC — GEM Ports
 
 | # | TR-181 Parameter | Description | X_RDK_ONT Equivalent | Data Type | Access |
 |---|---|---|---|---|---|
-| 33 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries` | Number of entries in the `Port` table. *Number of populated `Gem.{i}` rows.* | `Gem table` | unsignedInt | Read-Only |
-| 34 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortID` | Identifies a GEM port. | `Gem.{i}.PortId` | unsignedInt | Read-Only |
-| 35 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction` | Type of connection this GEM port is used for. *Only Bidirectional* maps; *Unidirectional* is rejected because the HAL omits the direction. | `Gem.{i}.TrafficType` | string | Read-Only |
-| 36 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesSent` | (X)GEM frames transmitted by this (X)GEM port. | `Gem.{i}.TransmittedFrames` | StatsCounter64 | Read-Only |
-| 37 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesReceived` | (X)GEM frames received by this (X)GEM port. | `Gem.{i}.ReceivedFrames` | StatsCounter64 | Read-Only |
+| 54 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries` | Number of entries in the `Port` table. *Number of populated `Gem.{i}` rows.* **Source:** HAL — number of `Device.X_RDK_ONT.Gem.{i}` rows. | `Gem table` | unsignedInt | Read-Only |
+| 55 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortID` | Identifies a GEM port. **Source:** HAL `Device.X_RDK_ONT.Gem.{i}.PortId`. | `Gem.{i}.PortId` | unsignedInt | Read-Only |
+| 56 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction` | Type of connection this GEM port is used for. *Only Bidirectional* maps; *Unidirectional* is rejected because the HAL omits the direction. **Source:** HAL `Device.X_RDK_ONT.Gem.{i}.TrafficType`. | `Gem.{i}.TrafficType` | string | Read-Only |
+| 57 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortType` | GEM port type. *`unicast` for a Bidirectional port, `multicast` for a Unidirectional (downstream-only) port; `broadcast` is never reported. Heuristic: the HAL has no port-type field.* **Source:** HAL `Device.X_RDK_ONT.Gem.{i}.TrafficType`. | `Gem.{i}.TrafficType` | string | Read-Only |
+| 58 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesSent` | (X)GEM frames transmitted by this (X)GEM port. **Source:** HAL `Device.X_RDK_ONT.Gem.{i}.TransmittedFrames`. | `Gem.{i}.TransmittedFrames` | StatsCounter64 | Read-Only |
+| 59 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesReceived` | (X)GEM frames received by this (X)GEM port. **Source:** HAL `Device.X_RDK_ONT.Gem.{i}.ReceivedFrames`. | `Gem.{i}.ReceivedFrames` | StatsCounter64 | Read-Only |
 
 #### 1.1.6 ANI.TC — Performance Thresholds
 
 | # | TR-181 Parameter | Description | X_RDK_ONT Equivalent | Data Type | Access |
 |---|---|---|---|---|---|
-| 38 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PerformanceThresholds.SignalFail` | Signal fail (SF) threshold. This parameter specifies the downstream bit error rate (BER) threshold to detect the SF alarm. | `PhysicalMedia.{i}.PerformanceThreshold.SignalFail` | unsignedInt | Read-Only |
-| 39 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PerformanceThresholds.SignalDegrade` | Signal degrade (SD) threshold. This parameter specifies the downstream BER threshold to detect the SD alarm. | `PhysicalMedia.{i}.PerformanceThreshold.SignalDegrade` | unsignedInt | Read-Only |
+| 60 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PerformanceThresholds.SignalFail` | Signal fail (SF) threshold. This parameter specifies the downstream bit error rate (BER) threshold to detect the SF alarm. **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.PerformanceThreshold.SignalFail`. | `PhysicalMedia.{i}.PerformanceThreshold.SignalFail` | unsignedInt | Read-Only |
+| 61 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PerformanceThresholds.SignalDegrade` | Signal degrade (SD) threshold. This parameter specifies the downstream BER threshold to detect the SD alarm. **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.PerformanceThreshold.SignalDegrade`. | `PhysicalMedia.{i}.PerformanceThreshold.SignalDegrade` | unsignedInt | Read-Only |
 
 #### 1.1.7 ANI.TC — Alarms
 
 | # | TR-181 Parameter | Description | X_RDK_ONT Equivalent | Data Type | Access |
 |---|---|---|---|---|---|
-| 40 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LOS` | Loss of signal. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_LOS` (§2.3). | `PhysicalMedia.{i}.Alarm.LOS` | boolean | Read-Only |
-| 41 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LOF` | Loss of frame. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_LOF` (§2.3). | `PhysicalMedia.{i}.Alarm.LOF` | boolean | Read-Only |
-| 42 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SF` | Signal failed. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_SF` (§2.3). | `PhysicalMedia.{i}.Alarm.SF` | boolean | Read-Only |
-| 43 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SD` | Signal degraded. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_SD` (§2.3). | `PhysicalMedia.{i}.Alarm.SD` | boolean | Read-Only |
-| 44 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LCDG` | Loss of GEM channel delineation. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_LCDG` (§2.3). | `PhysicalMedia.{i}.Alarm.LCDG` | boolean | Read-Only |
-| 45 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.TF` | Transmitter failure. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_TF` (§2.3). | `PhysicalMedia.{i}.Alarm.TF` | boolean | Read-Only |
-| 46 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SUF` | Start-up failure. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_SUF` (§2.3). | `PhysicalMedia.{i}.Alarm.SUF` | boolean | Read-Only |
-| 47 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.MEM` | Message error message. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_MEM` (§2.3). | `PhysicalMedia.{i}.Alarm.MEM` | boolean | Read-Only |
-| 48 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.DACT` | Deactivate ONU-ID. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_DACT` (§2.3). | `PhysicalMedia.{i}.Alarm.DACT` | boolean | Read-Only |
-| 49 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.DIS` | Disabled ONU. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_DIS` (§2.3). | `PhysicalMedia.{i}.Alarm.DIS` | boolean | Read-Only |
-| 50 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.MIS` | Link mismatching. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_MIS` (§2.3). | `PhysicalMedia.{i}.Alarm.MIS` | boolean | Read-Only |
-| 51 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.PEE` | When the ONU receives a PEE message. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_PEE` (§2.3). | `PhysicalMedia.{i}.Alarm.PEE` | boolean | Read-Only |
-| 52 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.RDI` | Remote defect indication. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_RDI` (§2.3). | `PhysicalMedia.{i}.Alarm.RDI` | boolean | Read-Only |
-| 53 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.ROGUE` | The ANI behaves rogue: it is not transmitting in a manner consistent with parameters specified in the ITU-T PON standards. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_ROGUE` (§2.3). | `PhysicalMedia.{i}.Alarm.ROGUE` | boolean | Read-Only |
+| 62 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LOS` | Loss of signal. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_LOS` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.LOS`. | `PhysicalMedia.{i}.Alarm.LOS` | boolean | Read-Only |
+| 63 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LOF` | Loss of frame. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_LOF` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.LOF`. | `PhysicalMedia.{i}.Alarm.LOF` | boolean | Read-Only |
+| 64 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SF` | Signal failed. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_SF` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.SF`. | `PhysicalMedia.{i}.Alarm.SF` | boolean | Read-Only |
+| 65 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SD` | Signal degraded. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_SD` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.SD`. | `PhysicalMedia.{i}.Alarm.SD` | boolean | Read-Only |
+| 66 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LCDG` | Loss of GEM channel delineation. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_LCDG` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.LCDG`. | `PhysicalMedia.{i}.Alarm.LCDG` | boolean | Read-Only |
+| 67 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.TF` | Transmitter failure. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_TF` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.TF`. | `PhysicalMedia.{i}.Alarm.TF` | boolean | Read-Only |
+| 68 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SUF` | Start-up failure. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_SUF` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.SUF`. | `PhysicalMedia.{i}.Alarm.SUF` | boolean | Read-Only |
+| 69 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.MEM` | Message error message. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_MEM` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.MEM`. | `PhysicalMedia.{i}.Alarm.MEM` | boolean | Read-Only |
+| 70 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.DACT` | Deactivate ONU-ID. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_DACT` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.DACT`. | `PhysicalMedia.{i}.Alarm.DACT` | boolean | Read-Only |
+| 71 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.DIS` | Disabled ONU. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_DIS` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.DIS`. | `PhysicalMedia.{i}.Alarm.DIS` | boolean | Read-Only |
+| 72 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.MIS` | Link mismatching. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_MIS` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.MIS`. | `PhysicalMedia.{i}.Alarm.MIS` | boolean | Read-Only |
+| 73 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.PEE` | When the ONU receives a PEE message. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_PEE` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.PEE`. | `PhysicalMedia.{i}.Alarm.PEE` | boolean | Read-Only |
+| 74 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.RDI` | Remote defect indication. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_RDI` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.RDI`. | `PhysicalMedia.{i}.Alarm.RDI` | boolean | Read-Only |
+| 75 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.ROGUE` | The ANI behaves rogue: it is not transmitting in a manner consistent with parameters specified in the ITU-T PON standards. *Active* → true. **Telemetry:** Every edge raises `XPON_ALARM_ROGUE` (§2.3). **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.ROGUE`. | `PhysicalMedia.{i}.Alarm.ROGUE` | boolean | Read-Only |
 
 #### 1.1.8 ANI.Transceiver
 
 | # | TR-181 Parameter | Description | X_RDK_ONT Equivalent | Data Type | Access |
 |---|---|---|---|---|---|
-| 54 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.ID` | The ID as assigned by the CPE to this Transceiver entry. | `PhysicalMedia row index` | unsignedInt | Read-Only |
-| 55 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorName` | Vendor name. | `PhysicalMedia.{i}.ModuleVendor` | string | Read-Only |
-| 56 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorPartNumber` | Vendor part number. | `PhysicalMedia.{i}.ModuleName` | string | Read-Only |
-| 57 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorRevision` | Vendor revision. | `PhysicalMedia.{i}.ModuleVersion` | string | Read-Only |
-| 58 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.PONMode` | PON mode, reports the PON mode of the transceiver. *Mapped to G-PON*, *XG-PON*, *NG-PON2*, *XGS-PON*. **Telemetry:** An EPON module raises `XPON_SYSTEM_HAL_WRONG_PON_MODE` (§2.4). | `PhysicalMedia.{i}.PonMode` | string | Read-Only |
-| 59 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Connector` | Connector type. | `PhysicalMedia.{i}.Connector` | string | Read-Only |
-| 60 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.NominalBitRateDownstream` | Nominal data rate downstream in kbps. *Passed through without unit conversion.* | `PhysicalMedia.{i}.NominalBitRateDownstream` | unsignedInt | Read-Only |
-| 61 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.NominalBitRateUpstream` | Nominal data rate upstream in kbps. *Passed through without unit conversion.* | `PhysicalMedia.{i}.NominalBitRateUpstream` | unsignedInt | Read-Only |
-| 62 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.RxPower` | Measured RX power in 0.1 dBm. *Passed through without unit conversion.* | `PhysicalMedia.{i}.RxPower.SignalLevel` | int | Read-Only |
-| 63 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.TxPower` | Measured TX power in 0.1 dBm. *Passed through without unit conversion.* | `PhysicalMedia.{i}.TxPower.SignalLevel` | int | Read-Only |
-| 64 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Voltage` | Measured supply voltage in mV. *Negative values are rejected.* | `PhysicalMedia.{i}.Voltage.VoltageLevel` | unsignedInt | Read-Only |
-| 65 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Bias` | Measured bias current in µA. *Passed through without unit conversion.* | `PhysicalMedia.{i}.Bias.CurrentBias` | unsignedInt | Read-Only |
-| 66 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Temperature` | Measured temperature in °C. *Values below −274 are rejected.* | `PhysicalMedia.{i}.Temperature.CurrentTemp` | int | Read-Only |
+| 76 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.ID` | The ID as assigned by the CPE to this Transceiver entry. **Source:** GPON Manager — zero-based HAL PhysicalMedia slot. | `PhysicalMedia row index` | unsignedInt | Read-Only |
+| 77 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Identifier` | Transceiver type as an SFF-8024 Table 4-1 identifier. *`3` (SFP/SFP+/SFP28) when the module cage is SFP; get rejected for BoB (bond-on-board), which has no pluggable-module identifier.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Cage`. | `PhysicalMedia.{i}.Cage` | unsignedInt | Read-Only |
+| 78 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorName` | Vendor name. **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.ModuleVendor`. | `PhysicalMedia.{i}.ModuleVendor` | string | Read-Only |
+| 79 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorPartNumber` | Vendor part number. **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.ModuleName`. | `PhysicalMedia.{i}.ModuleName` | string | Read-Only |
+| 80 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorRevision` | Vendor revision. **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.ModuleVersion`. | `PhysicalMedia.{i}.ModuleVersion` | string | Read-Only |
+| 81 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.PONMode` | PON mode, reports the PON mode of the transceiver. *Mapped to G-PON*, *XG-PON*, *NG-PON2*, *XGS-PON*. **Telemetry:** An EPON module raises `XPON_SYSTEM_HAL_WRONG_PON_MODE` (§2.4). *`Unknown` when the HAL reports `PonModeValid` = false.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.PonMode`. | `PhysicalMedia.{i}.PonMode` | string | Read-Only |
+| 82 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Connector` | Connector type. **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Connector`. | `PhysicalMedia.{i}.Connector` | string | Read-Only |
+| 83 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.NominalBitRateDownstream` | Nominal data rate downstream in kbps. *Passed through without unit conversion.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.NominalBitRateDownstream`. | `PhysicalMedia.{i}.NominalBitRateDownstream` | unsignedInt | Read-Only |
+| 84 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.NominalBitRateUpstream` | Nominal data rate upstream in kbps. *Passed through without unit conversion.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.NominalBitRateUpstream`. | `PhysicalMedia.{i}.NominalBitRateUpstream` | unsignedInt | Read-Only |
+| 85 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.RxPower` | Measured RX power in 0.1 dBm. *Passed through without unit conversion.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.RxPower.SignalLevel`. | `PhysicalMedia.{i}.RxPower.SignalLevel` | int | Read-Only |
+| 86 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.TxPower` | Measured TX power in 0.1 dBm. *Passed through without unit conversion.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.TxPower.SignalLevel`. | `PhysicalMedia.{i}.TxPower.SignalLevel` | int | Read-Only |
+| 87 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Voltage` | Measured supply voltage in mV. *Negative values are rejected.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Voltage.VoltageLevel`. | `PhysicalMedia.{i}.Voltage.VoltageLevel` | unsignedInt | Read-Only |
+| 88 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Bias` | Measured bias current in µA. *Passed through without unit conversion.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Bias.CurrentBias`. | `PhysicalMedia.{i}.Bias.CurrentBias` | unsignedInt | Read-Only |
+| 89 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Temperature` | Measured temperature in °C. *Values below −274 are rejected.* **Source:** HAL `Device.X_RDK_ONT.PhysicalMedia.{i}.Temperature.CurrentTemp`. | `PhysicalMedia.{i}.Temperature.CurrentTemp` | int | Read-Only |
 
 ### 1.2 `Device.X_RDK_ONT` — RDK Extensions
 
@@ -259,7 +286,7 @@ Defined in `config/RdkGponManager.xml` and served over the CCSP message bus by t
 
 ## 2. Telemetry Events (T2)
 
-All events are sent through the RDK T2 framework (`libtelemetry_msgsender`) by the telemetry module in `source/telemetry/`, registered with T2 as component `GponManager` (EPON uses `EponManager`). Markers use the `XPON_` prefix. Events with a value use `t2_event_s(marker, value)`; events without one use `t2_event_d(marker, 1)`. Every event is also logged as `[T2] <PRIORITY> <marker> [value]` in the GPON Manager log, even when T2 is compiled out.
+All events are sent through the RDK T2 framework (`libtelemetry_msgsender`) by the telemetry module in `source/telemetry/`, registered with T2 as component `GponManager`. Markers use the `XPON_` prefix. Events with a value use `t2_event_s(marker, value)`; events without one use `t2_event_d(marker, 1)`. Every event is also logged as `[T2] <PRIORITY> <marker> [value]` in the GPON Manager log, even when T2 is compiled out.
 
 > Telemetry is compiled in only with `--enable-telemetry2-0` (`ENABLE_FEATURE_TELEMETRY2_0`). Otherwise the API stays linked and only writes the log line.
 
@@ -275,9 +302,9 @@ Derived from transitions of the ONU activation state (`Device.XPON.ONU.{i}.ANI.{
 | `XPON_ONU_DOWNSTREAM_SIGNAL_DETECTED` | Downstream signal acquired: transition out of *O1* into any state other than O1. | Info | — | Startup and after each LOS recovery. 1–2 per boot. |
 | `XPON_ONU_REGISTRATION` | ONU reached *O5* (Operation) — ranging done, ONU-ID assigned, ONU in service. | Info | — | Once per boot; repeats after each recovery (1–3/day). |
 | `XPON_ONU_DEREGISTRATION` | ONU left *O5* (Operation) for any other state. | Warning | — | OLT deactivation, LOS, or ranging loss. 0–1/day normally. |
-| `XPON_ONU_EMERGENCY_STOP` | ONU entered *O7* (Emergency Stop) — OLT ordered the transmitter off (Disable_Serial_Number PLOAM). GPON-specific; no EPON equivalent. | Critical | — | Only on OLT action against this ONU (rogue / operator disable). Very rare. |
-| `XPON_ONU_EMERGENCY_STOP_CLEARED` | ONU left *O7* (Emergency Stop) — the OLT re-enabled the transmitter (Disable_Serial_Number with *enable*). GPON-specific; no EPON equivalent. | Info | — | Paired with each EMERGENCY_STOP. Very rare. |
-| `XPON_ONU_STATE_CHANGE` | Every ONU activation state change, including the ones the milestone events above don't cover (moves among *O2*/*O3*/*O4*, *O8*/*O9* tuning, returns from *O6*–*O9* to *O1*). Always sent first for a transition. The `From`/`To` pair identifies the transition (ranging failure, TO1/TO2 expiry, POPUP / LODS recovery, OLT disable), so no per-transition markers are defined; see §2.6.3 (GPON) and §2.6.5 (XGS-PON) for the meaning and possible reasons of each pair. GPON-specific; no EPON equivalent. | Info | `From=O<a>,To=O<b>` | Every PLOAM state change. About 4–5 per activation (O1→O2→O3→O4→O5), more while ranging is unstable. |
+| `XPON_ONU_EMERGENCY_STOP` | ONU entered *O7* (Emergency Stop) — OLT ordered the transmitter off (Disable_Serial_Number PLOAM). | Critical | — | Only on OLT action against this ONU (rogue / operator disable). Very rare. |
+| `XPON_ONU_EMERGENCY_STOP_CLEARED` | ONU left *O7* (Emergency Stop) — the OLT re-enabled the transmitter (Disable_Serial_Number with *enable*). | Info | — | Paired with each EMERGENCY_STOP. Very rare. |
+| `XPON_ONU_STATE_CHANGE` | Every ONU activation state change, including the ones the milestone events above don't cover (moves among *O2*/*O3*/*O4*, *O8*/*O9* tuning, returns from *O6*–*O9* to *O1*). Always sent first for a transition. The `From`/`To` pair identifies the transition (ranging failure, TO1/TO2 expiry, POPUP / LODS recovery, OLT disable), so no per-transition markers are defined; see §2.6.3 (GPON) and §2.6.5 (XGS-PON) for the meaning and possible reasons of each pair. | Info | `From=O<a>,To=O<b>` | Every PLOAM state change. About 4–5 per activation (O1→O2→O3→O4→O5), more while ranging is unstable. |
 
 ### 2.2 Interface Link Events
 
@@ -289,8 +316,8 @@ Derived from transitions of the ONU activation state (`Device.XPON.ONU.{i}.ANI.{
 | `XPON_INTF_LINK_DOWN` | VEIP interface went down and WAN Manager was told. | Warning | `Interface=<ifname>` | Once per link-down. 0–2/day normally. |
 | `XPON_PHY_STATUS_UP` | Aggregate PHY state went up: the first VEIP link of the ONU came up (0→1 links up). | Info | — | Once per boot plus 1 per full recovery. |
 | `XPON_PHY_STATUS_DOWN` | Aggregate PHY state went down: the last VEIP link went down (1→0 links up). The ONU has no WAN connectivity. | Critical | — | Only on full loss of WAN connectivity. 0–2/day. |
-| `XPON_INTF_ADMIN_UNLOCK` | The OLT unlocked the VEIP over OMCI (AdministrativeState *Lock→Unlock*). An Unlock also starts the VEIP link state machine. The default is *Lock*, so the first Unlock after start raises this event. GPON-specific; no EPON equivalent. | Info | `Interface=<ifname>,Veip=<n>` | Once per boot per VEIP after OMCI provisioning, plus 1 per re-provisioning. |
-| `XPON_INTF_ADMIN_LOCK` | The OLT locked the VEIP over OMCI (AdministrativeState *Unlock→Lock*): the UNI is administratively disabled and won't pass traffic. GPON-specific; no EPON equivalent. | Warning | `Interface=<ifname>,Veip=<n>` | Only on OLT/operator action. Rare. |
+| `XPON_INTF_ADMIN_UNLOCK` | The OLT unlocked the VEIP over OMCI (AdministrativeState *Lock→Unlock*). An Unlock also starts the VEIP link state machine. The default is *Lock*, so the first Unlock after start raises this event. | Info | `Interface=<ifname>,Veip=<n>` | Once per boot per VEIP after OMCI provisioning, plus 1 per re-provisioning. |
+| `XPON_INTF_ADMIN_LOCK` | The OLT locked the VEIP over OMCI (AdministrativeState *Unlock→Lock*): the UNI is administratively disabled and won't pass traffic. | Warning | `Interface=<ifname>,Veip=<n>` | Only on OLT/operator action. Rare. |
 
 ### 2.3 PhysicalMedia Alarms (G.984.3 / G.987.3)
 
@@ -340,7 +367,7 @@ Operational failures in the HAL, RBUS and state-machine paths. Repeating paths a
 
 ### 2.6 ONU State → Event Mapping
 
-`XPON_ONU_STATE_CHANGE` carries the previous and the new state (`From=O<a>,To=O<b>`), so every transition, including ranging failures, TO1/TO2 expiry, POPUP recovery and OLT disable, is identified from that pair alone. No extra per-transition markers are defined. The milestone events are kept for EPON parity and simple dashboards; they never carry information that isn't already in the pair.
+`XPON_ONU_STATE_CHANGE` carries the previous and the new state (`From=O<a>,To=O<b>`), so every transition, including ranging failures, TO1/TO2 expiry, POPUP recovery and OLT disable, is identified from that pair alone. No extra per-transition markers are defined. The milestone events are kept for simple dashboards; they never carry information that isn't already in the pair.
 
 Rules applied by `map_onu_state()`: every change raises `XPON_ONU_STATE_CHANGE` first, then the milestones that match, in this order: EMERGENCY_STOP_CLEARED (leaving O7), DOWNSTREAM_SIGNAL_DETECTED (leaving O1), LOS (entering O6, or O2–O5 → O1), DEREGISTRATION (leaving O5), REGISTRATION (entering O5), EMERGENCY_STOP (entering O7). Unchanged state raises nothing. The rules are the same for every PON mode.
 
@@ -501,126 +528,102 @@ Read the `XPON_ONU_STATE_CHANGE` values in order (T2 `"use": "accumulate"`) and 
 
 ## Appendix A. Unsupported `Device.XPON` Parameters
 
-These 69 parameters are registered in `g_elements[]` (`gponmgr_xpon_tr181.c`) to keep the BBF tree complete, but the unified GPON HAL has no matching field. A get returns `RBUS_ERROR_INVALID_OPERATION` and logs `XPON: BBF TR-181 <name> not supported yet`. Writable ones reject a set the same way, and subscriptions are rejected. No telemetry is sent for them.
+These 46 parameters are registered in `g_elements[]` (`gponmgr_xpon_tr181.c`) to keep the BBF tree complete, but neither the unified GPON HAL nor the Linux network stack provides a matching value. A get returns `RBUS_ERROR_INVALID_OPERATION` and logs `XPON: BBF TR-181 <name> not supported yet`. Writable ones reject a set the same way, and subscriptions are rejected. No telemetry is sent for them.
 
 > `Device.XPON.ONU.{i}.SoftwareImage.{i}` is registered as a table, but no rows are ever added because the HAL has no software-image inventory. Its parameters can't be reached at run time.
 
-### A.1 ONU (6)
+### A.1 ONU (4)
 
 | # | TR-181 Parameter | BBF Description | BBF Type | BBF Access | Behaviour |
 |---|---|---|---|---|---|
-| 1 | `Device.XPON.ONU.{i}.Enable` | Enables or disables this ONU. If disabled, the ONU should prevent user traffic from flowing, suppress notifications, and power down as much as possible. | boolean | Read/Write | Get/Set rejected |
-| 2 | `Device.XPON.ONU.{i}.PowerCapability` | Describes the possible power states of the ONU regardless of its current administrative state. | `list<string>` | Read-Only | Get rejected |
-| 3 | `Device.XPON.ONU.{i}.PowerStatus` | Reports the current power status of the ONU. | string | Read-Only | Get rejected |
-| 4 | `Device.XPON.ONU.{i}.Name` | The textual name of the ONU as assigned by the CPE. | string | Read-Only | Get rejected |
-| 5 | `Device.XPON.ONU.{i}.Version` | This attribute identifies the version of the ONU as defined by the vendor. | string | Read-Only | Get rejected |
-| 6 | `Device.XPON.ONU.{i}.EquipmentID` | This attribute may be used to identify the specific type of ONU. | string | Read-Only | Get rejected |
+| 1 | `Device.XPON.ONU.{i}.PowerCapability` | Describes the possible power states of the ONU regardless of its current administrative state. | `list<string>` | Read-Only | Get rejected |
+| 2 | `Device.XPON.ONU.{i}.PowerStatus` | Reports the current power status of the ONU. | string | Read-Only | Get rejected |
+| 3 | `Device.XPON.ONU.{i}.Version` | This attribute identifies the version of the ONU as defined by the vendor. | string | Read-Only | Get rejected |
+| 4 | `Device.XPON.ONU.{i}.EquipmentID` | This attribute may be used to identify the specific type of ONU. | string | Read-Only | Get rejected |
 
-### A.2 ONU.EthernetUNI (21)
+> **Version / EquipmentID:** the BBF values come from the OMCI ONU-G / ONU2-G managed entities, which the unified GPON HAL schema (`hal_schema/gpon_wan_unify_hal_schema.json`) doesn't expose yet. They can be supported once the HAL schema is extended.
+
+### A.2 ONU.EthernetUNI.Stats (7)
 
 | # | TR-181 Parameter | BBF Description | BBF Type | BBF Access | Behaviour |
 |---|---|---|---|---|---|
-| 7 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Alias` | Unique, non-volatile alias for this instance. | _AliasCWMP | Read/Write | Get/Set rejected |
-| 8 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Description` | A user-friendly description of the interface. | string | Read/Write | Get/Set rejected |
-| 9 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.LastChange` | The accumulated time in seconds since the interface entered its current operational state. | unsignedInt | Read-Only | Get rejected |
-| 10 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.LowerLayers` | Comma-separated list of references to an interface object that is stacked immediately below this interface object. | `list<string>` | Read/Write | Get/Set rejected |
-| 11 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Upstream` | Indicates whether the interface points towards the Internet or towards End Devices. | boolean | Read-Only | Get rejected |
-| 12 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.Reset` | Set this to true to reset all this object's statistics counters to zero. | boolean | Read/Write | Get/Set rejected |
-| 13 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesSent` | The total number of bytes transmitted out of the interface, including framing characters. | StatsCounter64 | Read-Only | Get rejected |
-| 14 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesReceived` | The total number of bytes received on the interface, including framing characters. | StatsCounter64 | Read-Only | Get rejected |
-| 15 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsSent` | The total number of packets transmitted out of the interface. | StatsCounter64 | Read-Only | Get rejected |
-| 16 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsReceived` | The total number of packets received on the interface. | StatsCounter64 | Read-Only | Get rejected |
-| 17 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsSent` | The total number of outbound packets that could not be transmitted because of errors. | StatsCounter32 | Read-Only | Get rejected |
-| 18 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsReceived` | The total number of inbound packets that contained errors preventing them from being delivered to a higher-layer protocol. | StatsCounter32 | Read-Only | Get rejected |
-| 19 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.UnicastPacketsSent` | The total number of packets requested for transmission which were not addressed to a multicast or broadcast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
-| 20 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsSent` | The total number of outbound packets which were chosen to be discarded even though no errors had been detected to prevent their being transmitted. | StatsCounter32 | Read-Only | Get rejected |
-| 21 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsReceived` | The total number of inbound packets which were chosen to be discarded even though no errors had been detected to prevent their being delivered. | StatsCounter32 | Read-Only | Get rejected |
-| 22 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.MulticastPacketsSent` | The total number of packets that higher-level protocols requested for transmission and which were addressed to a multicast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
-| 23 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.UnicastPacketsReceived` | The total number of received packets, delivered by this layer to a higher layer, which were not addressed to a multicast or broadcast address at this layer. | StatsCounter64 | Read-Only | Get rejected |
-| 24 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.MulticastPacketsReceived` | The total number of received packets, delivered by this layer to a higher layer, which were addressed to a multicast address at this layer. | StatsCounter64 | Read-Only | Get rejected |
-| 25 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BroadcastPacketsSent` | The total number of packets that higher-level protocols requested for transmission and which were addressed to a broadcast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
-| 26 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BroadcastPacketsReceived` | The total number of received packets, delivered by this layer to a higher layer, which were addressed to a broadcast address at this layer. | StatsCounter64 | Read-Only | Get rejected |
-| 27 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.UnknownProtoPacketsReceived` | The total number of packets received via the interface which were discarded because of an unknown or unsupported protocol. | StatsCounter32 | Read-Only | Get rejected |
+| 5 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.Reset` | Set this to true to reset all this object's statistics counters to zero. | boolean | Read/Write | Get/Set rejected |
+| 6 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.UnicastPacketsSent` | The total number of packets requested for transmission which were not addressed to a multicast or broadcast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
+| 7 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.MulticastPacketsSent` | The total number of packets that higher-level protocols requested for transmission and which were addressed to a multicast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
+| 8 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.UnicastPacketsReceived` | The total number of received packets, delivered by this layer to a higher layer, which were not addressed to a multicast or broadcast address at this layer. | StatsCounter64 | Read-Only | Get rejected |
+| 9 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BroadcastPacketsSent` | The total number of packets that higher-level protocols requested for transmission and which were addressed to a broadcast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
+| 10 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BroadcastPacketsReceived` | The total number of received packets, delivered by this layer to a higher layer, which were addressed to a broadcast address at this layer. | StatsCounter64 | Read-Only | Get rejected |
+| 11 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.UnknownProtoPacketsReceived` | The total number of packets received via the interface which were discarded because of an unknown or unsupported protocol. | StatsCounter32 | Read-Only | Get rejected |
+
+> **EthernetUNI.Stats:** the supported counters come from Linux sysfs (§1.1.1). The kernel has no unicast/broadcast split, no multicast-sent or unknown-protocol counter, and the counters can't be reset, so these 7 stay unsupported.
 
 ### A.3 ONU.SoftwareImage (5)
 
 | # | TR-181 Parameter | BBF Description | BBF Type | BBF Access | Behaviour |
 |---|---|---|---|---|---|
-| 28 | `Device.XPON.ONU.{i}.SoftwareImage.{i}.ID` | The ID as assigned by the CPE to this SoftwareImage entry. | unsignedInt | Read-Only | Get rejected |
-| 29 | `Device.XPON.ONU.{i}.SoftwareImage.{i}.Version` | A string identifying the software version. | string | Read-Only | Get rejected |
-| 30 | `Device.XPON.ONU.{i}.SoftwareImage.{i}.IsCommitted` | This parameter indicates whether or not the associated software image is committed. | boolean | Read-Only | Get rejected |
-| 31 | `Device.XPON.ONU.{i}.SoftwareImage.{i}.IsActive` | This parameter indicates whether the associated software image is active or inactive. | boolean | Read-Only | Get rejected |
-| 32 | `Device.XPON.ONU.{i}.SoftwareImage.{i}.IsValid` | This parameter indicates whether the associated software image is valid or invalid. | boolean | Read-Only | Get rejected |
+| 12 | `Device.XPON.ONU.{i}.SoftwareImage.{i}.ID` | The ID as assigned by the CPE to this SoftwareImage entry. | unsignedInt | Read-Only | Get rejected |
+| 13 | `Device.XPON.ONU.{i}.SoftwareImage.{i}.Version` | A string identifying the software version. | string | Read-Only | Get rejected |
+| 14 | `Device.XPON.ONU.{i}.SoftwareImage.{i}.IsCommitted` | This parameter indicates whether or not the associated software image is committed. | boolean | Read-Only | Get rejected |
+| 15 | `Device.XPON.ONU.{i}.SoftwareImage.{i}.IsActive` | This parameter indicates whether the associated software image is active or inactive. | boolean | Read-Only | Get rejected |
+| 16 | `Device.XPON.ONU.{i}.SoftwareImage.{i}.IsValid` | This parameter indicates whether the associated software image is valid or invalid. | boolean | Read-Only | Get rejected |
 
-### A.4 ONU.ANI (base & Stats) (18)
-
-| # | TR-181 Parameter | BBF Description | BBF Type | BBF Access | Behaviour |
-|---|---|---|---|---|---|
-| 33 | `Device.XPON.ONU.{i}.ANI.{i}.Name` | The textual name of the ANI entry as assigned by the CPE. | string | Read-Only | Get rejected |
-| 34 | `Device.XPON.ONU.{i}.ANI.{i}.PONMode` | PON mode, defines the detected or configured PON mode of the ANI. | string | Read-Only | Get rejected |
-| 35 | `Device.XPON.ONU.{i}.ANI.{i}.SFPReferenceList` | Small-form Factor Pluggable (SFP) entries associated with this interface. | `list<string>` | Read-Only | Get rejected |
-| 36 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.BytesSent` | The total number of bytes transmitted out of the interface, including framing characters. | StatsCounter64 | Read-Only | Get rejected |
-| 37 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.BytesReceived` | The total number of bytes received on the interface, including framing characters. | StatsCounter64 | Read-Only | Get rejected |
-| 38 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.PacketsSent` | The total number of Ethernet frames transmitted out of the interface. | StatsCounter64 | Read-Only | Get rejected |
-| 39 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.PacketsReceived` | The total number of Ethernet frames received on the interface. | StatsCounter64 | Read-Only | Get rejected |
-| 40 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.ErrorsSent` | The total number of outbound Ethernet frames that could not be transmitted because of errors. | StatsCounter32 | Read-Only | Get rejected |
-| 41 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.ErrorsReceived` | The total number of inbound Ethernet frames that contained errors preventing them from being forwarded to the UNI(s). | StatsCounter32 | Read-Only | Get rejected |
-| 42 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.UnicastPacketsSent` | The total number of Ethernet frames requested for transmission which were not addressed to a multicast or broadcast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
-| 43 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.UnicastPacketsReceived` | The total number of Ethernet frames, forwarded by this interface to the UNI(s), which were not addressed to a multicast or broadcast address at this layer. | StatsCounter64 | Read-Only | Get rejected |
-| 44 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.DiscardPacketsSent` | The total number of outbound Ethernet frames which were chosen to be discarded even though no errors had been detected to prevent their being transmitted. | StatsCounter32 | Read-Only | Get rejected |
-| 45 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.DiscardPacketsReceived` | The total number of inbound Ethernet frames which were chosen to be discarded even though no errors had been detected to prevent their being delivered. | StatsCounter32 | Read-Only | Get rejected |
-| 46 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.MulticastPacketsSent` | The total number of Ethernet frames requested for transmission and which were addressed to a multicast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
-| 47 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.MulticastPacketsReceived` | The total number of received Ethernet frames, forwarded by this interface to the UNI(s), which were addressed to a multicast address at this layer. | StatsCounter64 | Read-Only | Get rejected |
-| 48 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.BroadcastPacketsSent` | The total number of Ethernet frames requested for transmission on the PON and which were addressed to a broadcast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
-| 49 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.BroadcastPacketsReceived` | The total number of received Ethernet frames, forwarded by this interface to the UNI(s), which were addressed to a broadcast address at this layer. | StatsCounter64 | Read-Only | Get rejected |
-| 50 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.UnknownProtoPacketsReceived` | The total number of Ethernet frames received via the interface which were discarded because of an unknown or unsupported protocol. | StatsCounter32 | Read-Only | Get rejected |
-
-### A.5 ONU.ANI.TC (9)
+### A.4 ONU.ANI.Stats (15)
 
 | # | TR-181 Parameter | BBF Description | BBF Type | BBF Access | Behaviour |
 |---|---|---|---|---|---|
-| 51 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Authentication.Password` | All ITU based PON standards specify authentication by PLOAM password or registration ID. | string | Read/Write | Get/Set rejected |
-| 52 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Authentication.HexadecimalPassword` | If false, `Password` is in ASCII format. | boolean | Read/Write | Get/Set rejected |
-| 53 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.UnknownProfile` | ONU could not transmit because the specified burst profile was not known. | StatsCounter32 | Read-Only | Get rejected |
-| 54 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesSent` | Total number of (X)GEM frames transmitted. | StatsCounter64 | Read-Only | Get rejected |
-| 55 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesReceived` | Total number of (X)GEM frames received. | StatsCounter64 | Read-Only | Get rejected |
-| 56 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.KeyErrors` | XGEM key errors. XGEM frames discarded because of unknown or invalid encryption key. | StatsCounter32 | Read-Only | Get rejected |
-| 57 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.RangingTime` | Count of Ranging_Time PLOAM messages sent by OLT. | StatsCounter64 | Read-Only | Get rejected |
-| 58 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortType` | GEM port type. | string | Read-Only | Get rejected |
-| 59 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LODS` | Loss of downstream synchronization. | boolean | Read-Only | Get rejected |
+| 17 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.BytesSent` | The total number of bytes transmitted out of the interface, including framing characters. | StatsCounter64 | Read-Only | Get rejected |
+| 18 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.BytesReceived` | The total number of bytes received on the interface, including framing characters. | StatsCounter64 | Read-Only | Get rejected |
+| 19 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.PacketsSent` | The total number of Ethernet frames transmitted out of the interface. | StatsCounter64 | Read-Only | Get rejected |
+| 20 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.PacketsReceived` | The total number of Ethernet frames received on the interface. | StatsCounter64 | Read-Only | Get rejected |
+| 21 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.ErrorsSent` | The total number of outbound Ethernet frames that could not be transmitted because of errors. | StatsCounter32 | Read-Only | Get rejected |
+| 22 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.ErrorsReceived` | The total number of inbound Ethernet frames that contained errors preventing them from being forwarded to the UNI(s). | StatsCounter32 | Read-Only | Get rejected |
+| 23 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.UnicastPacketsSent` | The total number of Ethernet frames requested for transmission which were not addressed to a multicast or broadcast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
+| 24 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.UnicastPacketsReceived` | The total number of Ethernet frames, forwarded by this interface to the UNI(s), which were not addressed to a multicast or broadcast address at this layer. | StatsCounter64 | Read-Only | Get rejected |
+| 25 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.DiscardPacketsSent` | The total number of outbound Ethernet frames which were chosen to be discarded even though no errors had been detected to prevent their being transmitted. | StatsCounter32 | Read-Only | Get rejected |
+| 26 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.DiscardPacketsReceived` | The total number of inbound Ethernet frames which were chosen to be discarded even though no errors had been detected to prevent their being delivered. | StatsCounter32 | Read-Only | Get rejected |
+| 27 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.MulticastPacketsSent` | The total number of Ethernet frames requested for transmission and which were addressed to a multicast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
+| 28 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.MulticastPacketsReceived` | The total number of received Ethernet frames, forwarded by this interface to the UNI(s), which were addressed to a multicast address at this layer. | StatsCounter64 | Read-Only | Get rejected |
+| 29 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.BroadcastPacketsSent` | The total number of Ethernet frames requested for transmission on the PON and which were addressed to a broadcast address at this layer, including those that were discarded or not sent. | StatsCounter64 | Read-Only | Get rejected |
+| 30 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.BroadcastPacketsReceived` | The total number of received Ethernet frames, forwarded by this interface to the UNI(s), which were addressed to a broadcast address at this layer. | StatsCounter64 | Read-Only | Get rejected |
+| 31 | `Device.XPON.ONU.{i}.ANI.{i}.Stats.UnknownProtoPacketsReceived` | The total number of Ethernet frames received via the interface which were discarded because of an unknown or unsupported protocol. | StatsCounter32 | Read-Only | Get rejected |
 
-### A.6 ONU.ANI.Transceiver (1)
+### A.5 ONU.ANI.TC (6)
 
 | # | TR-181 Parameter | BBF Description | BBF Type | BBF Access | Behaviour |
 |---|---|---|---|---|---|
-| 60 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Identifier` | Transceiver type. Allowed values are given by. | unsignedInt | Read-Only | Get rejected |
+| 32 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Authentication.Password` | All ITU based PON standards specify authentication by PLOAM password or registration ID. | string | Read/Write | Get/Set rejected |
+| 33 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Authentication.HexadecimalPassword` | If false, `Password` is in ASCII format. | boolean | Read/Write | Get/Set rejected |
+| 34 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.UnknownProfile` | ONU could not transmit because the specified burst profile was not known. | StatsCounter32 | Read-Only | Get rejected |
+| 35 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.KeyErrors` | XGEM key errors. XGEM frames discarded because of unknown or invalid encryption key. | StatsCounter32 | Read-Only | Get rejected |
+| 36 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.RangingTime` | Count of Ranging_Time PLOAM messages sent by OLT. | StatsCounter64 | Read-Only | Get rejected |
+| 37 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LODS` | Loss of downstream synchronization. *The HAL has no LODS alarm. `LOF` is not an equivalent, so it is not reused.* | boolean | Read-Only | Get rejected |
 
-### A.7 ONU.PowerManagement (9)
+### A.6 ONU.PowerManagement (9)
 
 | # | TR-181 Parameter | BBF Description | BBF Type | BBF Access | Behaviour |
 |---|---|---|---|---|---|
-| 61 | `Device.XPON.ONU.{i}.PowerManagement.PowerReductionManagementCapability` | This parameter indicates the sleep mode capability of the PowerManagement. | `list<string>` | Read-Only | Get rejected |
-| 62 | `Device.XPON.ONU.{i}.PowerManagement.OLTSleepAllow` | This parameter indicates that the ONU is allowed, by the OLT, to apply the power reduction mode. | boolean | Read-Only | Get rejected |
-| 63 | `Device.XPON.ONU.{i}.PowerManagement.PowerReductionManagementStatus` | This parameter indicates the current power reduction management status of the ONU. | string | Read-Only | Get rejected |
-| 64 | `Device.XPON.ONU.{i}.PowerManagement.ITransInit` | Optical Network Unit (ONU) vendor's statement of the complete transceiver initialization time: the worst-case time required for the ONU to regain full functionality when leaving the asleep state (i.e., turning on both the receiver and the transmitter and acquiring synchronization to the downstream flow), measured in units of 125 µs frames. | unsignedInt | Read-Only | Get rejected |
-| 65 | `Device.XPON.ONU.{i}.PowerManagement.ITxInit` | This parameter is the Optical Network Unit (ONU) vendor's statement of the transmitter initialization time: the time required for the ONU to regain full functionality when leaving the listen state (i.e., turning on the transmitter), measured in units of 125 µs frames. | unsignedInt | Read-Only | Get rejected |
-| 66 | `Device.XPON.ONU.{i}.PowerManagement.MaxSleepInterval` | The Isleep/Ilowpower attribute specifies the maximum time the ONU spends in its asleep, listen, or low-power states, as a count of 125 µs frames. | unsignedInt | Read-Only | Get rejected |
-| 67 | `Device.XPON.ONU.{i}.PowerManagement.MinAwareInterval` | The Iaware attribute specifies the time the ONU spends in its aware state, as a count of 125 µs frames, before it re-enters asleep or listen states. | unsignedInt | Read-Only | Get rejected |
-| 68 | `Device.XPON.ONU.{i}.PowerManagement.MinActiveHeldInterval` | The Ihold attribute specifies the minimum time during which the ONU remains in the active held state, as a count of 125 µs frames. | unsignedInt | Read-Only | Get rejected |
-| 69 | `Device.XPON.ONU.{i}.PowerManagement.MaxSleepIntervalExtension` | This parameter designates maximum sleep interval values for doze mode and cyclic sleep mode separately. | unsignedLong | Read-Only | Get rejected |
+| 38 | `Device.XPON.ONU.{i}.PowerManagement.PowerReductionManagementCapability` | This parameter indicates the sleep mode capability of the PowerManagement. | `list<string>` | Read-Only | Get rejected |
+| 39 | `Device.XPON.ONU.{i}.PowerManagement.OLTSleepAllow` | This parameter indicates that the ONU is allowed, by the OLT, to apply the power reduction mode. | boolean | Read-Only | Get rejected |
+| 40 | `Device.XPON.ONU.{i}.PowerManagement.PowerReductionManagementStatus` | This parameter indicates the current power reduction management status of the ONU. | string | Read-Only | Get rejected |
+| 41 | `Device.XPON.ONU.{i}.PowerManagement.ITransInit` | Optical Network Unit (ONU) vendor's statement of the complete transceiver initialization time: the worst-case time required for the ONU to regain full functionality when leaving the asleep state (i.e., turning on both the receiver and the transmitter and acquiring synchronization to the downstream flow), measured in units of 125 µs frames. | unsignedInt | Read-Only | Get rejected |
+| 42 | `Device.XPON.ONU.{i}.PowerManagement.ITxInit` | This parameter is the Optical Network Unit (ONU) vendor's statement of the transmitter initialization time: the time required for the ONU to regain full functionality when leaving the listen state (i.e., turning on the transmitter), measured in units of 125 µs frames. | unsignedInt | Read-Only | Get rejected |
+| 43 | `Device.XPON.ONU.{i}.PowerManagement.MaxSleepInterval` | The Isleep/Ilowpower attribute specifies the maximum time the ONU spends in its asleep, listen, or low-power states, as a count of 125 µs frames. | unsignedInt | Read-Only | Get rejected |
+| 44 | `Device.XPON.ONU.{i}.PowerManagement.MinAwareInterval` | The Iaware attribute specifies the time the ONU spends in its aware state, as a count of 125 µs frames, before it re-enters asleep or listen states. | unsignedInt | Read-Only | Get rejected |
+| 45 | `Device.XPON.ONU.{i}.PowerManagement.MinActiveHeldInterval` | The Ihold attribute specifies the minimum time during which the ONU remains in the active held state, as a count of 125 µs frames. | unsignedInt | Read-Only | Get rejected |
+| 46 | `Device.XPON.ONU.{i}.PowerManagement.MaxSleepIntervalExtension` | This parameter designates maximum sleep interval values for doze mode and cyclic sleep mode separately. | unsignedLong | Read-Only | Get rejected |
 
 ## Appendix B. `Device.XPON` ↔ `Device.X_RDK_ONT` Mapping
 
-Maps each supported `Device.XPON` parameter (§1.1) to the `Device.X_RDK_ONT` parameter that backs it. Both read the same `GPON_DML_DATA` field, so the values are always consistent. Because `Device.XPON` takes precedence, the 58 `X_RDK_ONT` parameters in B.1 are not repeated in §1.2. 8 `Device.XPON` parameters have no single `X_RDK_ONT` source (constants, table counts, row index).
+Maps each supported `Device.XPON` parameter (§1.1) to the `Device.X_RDK_ONT` parameter that backs it. Both read the same `GPON_DML_DATA` field, so the values are always consistent. Because `Device.XPON` takes precedence, the 58 `X_RDK_ONT` parameters in B.1 are not repeated in §1.2. 25 `Device.XPON` parameters have no single `X_RDK_ONT` source (constants, table counts, row index, JSON-HAL connection state, Linux sysfs counters and sums over all GEM ports). `PhysicalMedia.{i}.Cage` also backs `Transceiver.{i}.Identifier`, but stays in §1.2 because BBF has no value for a bond-on-board (BoB) module.
 
 |  | Parameters |
 |---|---|
 | `Device.X_RDK_ONT` total | 95 |
 |   mapped to a supported `Device.XPON` parameter (B.1) | 58 |
 |   RDK extensions, no BBF equivalent (§1.2) | 37 |
-| `Device.XPON` supported (§1.1) | 66 |
-| `Device.XPON` unsupported (Appendix A) | 69 |
-|   of which X_RDK_ONT data exists but isn't wired (B.2) | 3 |
+| `Device.XPON` supported (§1.1) | 89 |
+| `Device.XPON` unsupported (Appendix A) | 46 |
+|   of which X_RDK_ONT data exists but isn't wired (B.2) | 0 |
 
 ### B.1 Supported `Device.XPON` → `Device.X_RDK_ONT`
 
@@ -630,78 +633,95 @@ Maps each supported `Device.XPON` parameter (§1.1) to the `Device.X_RDK_ONT` pa
 | 2 | `Device.XPON.ONU.{i}.SoftwareImageNumberOfEntries` | *constant* | Always 0 — no software-image rows are registered. |
 | 3 | `Device.XPON.ONU.{i}.EthernetUNINumberOfEntries` | *Veip table* | Number of populated `Veip.{i}` rows. |
 | 4 | `Device.XPON.ONU.{i}.ANINumberOfEntries` | *constant* | Always 1. |
-| 5 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Enable` | `Device.X_RDK_ONT.Veip.{i}.AdministrativeState` | *Unlock* → true, *Lock* → false. |
-| 6 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Status` | `Device.X_RDK_ONT.Veip.{i}.OperationalState` | Same enumeration. |
-| 7 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Name` | `Device.X_RDK_ONT.Veip.{i}.InterfaceName` | Get fails if longer than 64 characters. |
-| 8 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.ANIs` | *constant* | Always `Device.XPON.ONU.1.ANI.1`. |
-| 9 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainID` | `Device.X_RDK_ONT.Veip.{i}.MeId` | Formatted as `(VEIP,<MeId>)`. |
-| 10 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainName` | `Device.X_RDK_ONT.Veip.{i}.InterDomainName` | Direct copy. |
-| 11 | `Device.XPON.ONU.{i}.ANI.{i}.Enable` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Enable` | Direct copy. |
-| 12 | `Device.XPON.ONU.{i}.ANI.{i}.Status` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Status` | Uses the uniquely active PhysicalMedia row. |
-| 13 | `Device.XPON.ONU.{i}.ANI.{i}.Alias` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alias` | Direct copy. |
-| 14 | `Device.XPON.ONU.{i}.ANI.{i}.LastChange` | `Device.X_RDK_ONT.PhysicalMedia.{i}.LastChange` | Direct copy. |
-| 15 | `Device.XPON.ONU.{i}.ANI.{i}.TransceiverNumberOfEntries` | *PhysicalMedia table* | Number of populated PhysicalMedia rows. |
-| 16 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUState` | `Device.X_RDK_ONT.Ploam.RegistrationState` | O1–O9 (the BBF combined *O2-3* value is never reported). |
-| 17 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.VendorID` | `Device.X_RDK_ONT.Ploam.VendorId` | Get fails if longer than 4 characters. |
-| 18 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.SerialNumber` | `Device.X_RDK_ONT.Ploam.SerialNumber` | Get fails if not a valid 12-character (or 16 hex digit) serial. |
-| 19 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUID` | `Device.X_RDK_ONT.Ploam.OnuId` | Direct copy. |
-| 20 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.CorrectedFECBytes` | `Device.X_RDK_ONT.Gtc.CorrectedFecBytes` | Direct copy. |
-| 21 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.CorrectedFECCodewords` | `Device.X_RDK_ONT.Gtc.CorrectedFecCodeWords` | Direct copy. |
-| 22 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.UncorrectableFECCodewords` | `Device.X_RDK_ONT.Gtc.UnCorrectedFecCodeWords` | Direct copy. |
-| 23 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.TotalFECCodewords` | `Device.X_RDK_ONT.Gtc.TotalFecCodeWords` | Direct copy. |
-| 24 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.PSBdHECErrorCount` | `Device.X_RDK_ONT.Gtc.PSBdHecErrors` | Direct copy. |
-| 25 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.HeaderHECErrorCount` | `Device.X_RDK_ONT.Gtc.HecErrorCount` | Mapping is a best match (see `XPON-TR181-MAPPING.md`). |
-| 26 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FrameHeaderHECErrors` | `Device.X_RDK_ONT.Gtc.FrameHecErrors` | Mapping is a best match (see `XPON-TR181-MAPPING.md`). |
-| 27 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.MICErrors` | `Device.X_RDK_ONT.Ploam.MicErrors` | Direct copy. |
-| 28 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.DownstreamMessageCount` | `Device.X_RDK_ONT.Ploam.RxMessageCount` | Direct copy. |
-| 29 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.UpstreamMessageCount` | `Device.X_RDK_ONT.Ploam.TxMessageCount` | Direct copy. |
-| 30 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.BaselineMessagesReceived` | `Device.X_RDK_ONT.Omci.RxBaseLineMessageCountValid` | Direct copy. |
-| 31 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.ExtendedMessagesReceived` | `Device.X_RDK_ONT.Omci.RxExtendedMessageCountValid` | Direct copy. |
-| 32 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.MICErrors` | `Device.X_RDK_ONT.Omci.MicErrors` | Direct copy. |
-| 33 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries` | *Gem table* | Number of populated `Gem.{i}` rows. |
-| 34 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortID` | `Device.X_RDK_ONT.Gem.{i}.PortId` | Direct copy. |
-| 35 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction` | `Device.X_RDK_ONT.Gem.{i}.TrafficType` | Only *Bidirectional* maps (reported as `bidirectional`); *Unidirectional* is rejected because the HAL omits the direction. |
-| 36 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesSent` | `Device.X_RDK_ONT.Gem.{i}.TransmittedFrames` | Direct copy. |
-| 37 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesReceived` | `Device.X_RDK_ONT.Gem.{i}.ReceivedFrames` | Direct copy. |
-| 38 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PerformanceThresholds.SignalFail` | `Device.X_RDK_ONT.PhysicalMedia.{i}.PerformanceThreshold.SignalFail` | Direct copy. |
-| 39 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PerformanceThresholds.SignalDegrade` | `Device.X_RDK_ONT.PhysicalMedia.{i}.PerformanceThreshold.SignalDegrade` | Direct copy. |
-| 40 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LOS` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.LOS` | *Active* → true. |
-| 41 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LOF` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.LOF` | *Active* → true. |
-| 42 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SF` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.SF` | *Active* → true. |
-| 43 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SD` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.SD` | *Active* → true. |
-| 44 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LCDG` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.LCDG` | *Active* → true. |
-| 45 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.TF` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.TF` | *Active* → true. |
-| 46 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SUF` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.SUF` | *Active* → true. |
-| 47 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.MEM` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.MEM` | *Active* → true. |
-| 48 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.DACT` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.DACT` | *Active* → true. |
-| 49 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.DIS` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.DIS` | *Active* → true. |
-| 50 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.MIS` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.MIS` | *Active* → true. |
-| 51 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.PEE` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.PEE` | *Active* → true. |
-| 52 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.RDI` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.RDI` | *Active* → true. |
-| 53 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.ROGUE` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.ROGUE` | *Active* → true. |
-| 54 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.ID` | *PhysicalMedia row index* | Direct copy. |
-| 55 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorName` | `Device.X_RDK_ONT.PhysicalMedia.{i}.ModuleVendor` | Direct copy. |
-| 56 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorPartNumber` | `Device.X_RDK_ONT.PhysicalMedia.{i}.ModuleName` | Direct copy. |
-| 57 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorRevision` | `Device.X_RDK_ONT.PhysicalMedia.{i}.ModuleVersion` | Direct copy. |
-| 58 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.PONMode` | `Device.X_RDK_ONT.PhysicalMedia.{i}.PonMode` | Mapped to *G-PON*, *XG-PON*, *NG-PON2*, *XGS-PON*. |
-| 59 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Connector` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Connector` | Direct copy. |
-| 60 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.NominalBitRateDownstream` | `Device.X_RDK_ONT.PhysicalMedia.{i}.NominalBitRateDownstream` | Passed through without unit conversion. |
-| 61 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.NominalBitRateUpstream` | `Device.X_RDK_ONT.PhysicalMedia.{i}.NominalBitRateUpstream` | Passed through without unit conversion. |
-| 62 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.RxPower` | `Device.X_RDK_ONT.PhysicalMedia.{i}.RxPower.SignalLevel` | Passed through without unit conversion. |
-| 63 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.TxPower` | `Device.X_RDK_ONT.PhysicalMedia.{i}.TxPower.SignalLevel` | Passed through without unit conversion. |
-| 64 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Voltage` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Voltage.VoltageLevel` | Negative values are rejected. |
-| 65 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Bias` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Bias.CurrentBias` | Passed through without unit conversion. |
-| 66 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Temperature` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Temperature.CurrentTemp` | Values below −274 are rejected. |
+| 5 | `Device.XPON.ONU.{i}.Enable` | *JSON-HAL client* | `true` while the JSON-HAL client is connected; read-only (BBF: Read/Write). |
+| 6 | `Device.XPON.ONU.{i}.Name` | *constant* | Always `ONU<i>`. |
+| 7 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Enable` | `Device.X_RDK_ONT.Veip.{i}.AdministrativeState` | *Unlock* → true, *Lock* → false. |
+| 8 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Status` | `Device.X_RDK_ONT.Veip.{i}.OperationalState` | Same enumeration. |
+| 9 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Name` | `Device.X_RDK_ONT.Veip.{i}.InterfaceName` | Get fails if longer than 64 characters. |
+| 10 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.ANIs` | *constant* | Always `Device.XPON.ONU.1.ANI.1`. |
+| 11 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainID` | `Device.X_RDK_ONT.Veip.{i}.MeId` | Formatted as `(VEIP,<MeId>)`. |
+| 12 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainName` | `Device.X_RDK_ONT.Veip.{i}.InterDomainName` | Direct copy. |
+| 13 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Alias` | `Device.X_RDK_ONT.Veip.{i}.InterfaceName` | `cpe-` + upper-case name; read-only (BBF: Read/Write). |
+| 14 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Description` | `Device.X_RDK_ONT.Veip.{i}.InterfaceName` | `GPON VEIP WAN interface <Alias>`; read-only (BBF: Read/Write). |
+| 15 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.LastChange` | `Device.X_RDK_ONT.Veip.{i}.OperationalState` | Seconds since the last OperationalState change, computed by GPON Manager. |
+| 16 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.LowerLayers` | *constant* | Always empty; read-only (BBF: Read/Write). |
+| 17 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Upstream` | *constant* | Always `true`. |
+| 18 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesSent` | *Linux sysfs* | `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/tx_bytes`. |
+| 19 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesReceived` | *Linux sysfs* | `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/rx_bytes`. |
+| 20 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsSent` | *Linux sysfs* | `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/tx_packets`. |
+| 21 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsReceived` | *Linux sysfs* | `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/rx_packets`. |
+| 22 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsSent` | *Linux sysfs* | `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/tx_errors`. |
+| 23 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsReceived` | *Linux sysfs* | `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/rx_errors`. |
+| 24 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsSent` | *Linux sysfs* | `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/tx_dropped`. |
+| 25 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsReceived` | *Linux sysfs* | `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/rx_dropped`. |
+| 26 | `Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.MulticastPacketsReceived` | *Linux sysfs* | `/sys/class/net/<Veip.{i}.InterfaceName>/statistics/multicast`. |
+| 27 | `Device.XPON.ONU.{i}.ANI.{i}.Enable` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Enable` | Direct copy; read-only in GPON Manager. |
+| 28 | `Device.XPON.ONU.{i}.ANI.{i}.Status` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Status` | Uses the uniquely active PhysicalMedia row. |
+| 29 | `Device.XPON.ONU.{i}.ANI.{i}.Alias` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alias` | Direct copy; read-only in GPON Manager. |
+| 30 | `Device.XPON.ONU.{i}.ANI.{i}.LastChange` | `Device.X_RDK_ONT.PhysicalMedia.{i}.LastChange` | Direct copy. |
+| 31 | `Device.XPON.ONU.{i}.ANI.{i}.TransceiverNumberOfEntries` | *PhysicalMedia table* | Number of populated PhysicalMedia rows. |
+| 32 | `Device.XPON.ONU.{i}.ANI.{i}.Name` | *constant* | Always `ANI<i>`. |
+| 33 | `Device.XPON.ONU.{i}.ANI.{i}.PONMode` | `Device.X_RDK_ONT.PhysicalMedia.{i}.PonMode` | Same mapping as `Transceiver.{i}.PONMode`; `Unknown` if not valid or no unique active row. |
+| 34 | `Device.XPON.ONU.{i}.ANI.{i}.SFPReferenceList` | *constant* | Always empty (no `Device.SFPs` table). |
+| 35 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUState` | `Device.X_RDK_ONT.Ploam.RegistrationState` | O1–O9 (the BBF combined *O2-3* value is never reported). |
+| 36 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.VendorID` | `Device.X_RDK_ONT.Ploam.VendorId` | Get fails if longer than 4 characters. |
+| 37 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.SerialNumber` | `Device.X_RDK_ONT.Ploam.SerialNumber` | Get fails if not a valid 12-character (or 16 hex digit) serial. |
+| 38 | `Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUID` | `Device.X_RDK_ONT.Ploam.OnuId` | Direct copy. |
+| 39 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.CorrectedFECBytes` | `Device.X_RDK_ONT.Gtc.CorrectedFecBytes` | Direct copy. |
+| 40 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.CorrectedFECCodewords` | `Device.X_RDK_ONT.Gtc.CorrectedFecCodeWords` | Direct copy. |
+| 41 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.UncorrectableFECCodewords` | `Device.X_RDK_ONT.Gtc.UnCorrectedFecCodeWords` | Direct copy. |
+| 42 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.TotalFECCodewords` | `Device.X_RDK_ONT.Gtc.TotalFecCodeWords` | Direct copy. |
+| 43 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.PSBdHECErrorCount` | `Device.X_RDK_ONT.Gtc.PSBdHecErrors` | Direct copy. |
+| 44 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.HeaderHECErrorCount` | `Device.X_RDK_ONT.Gtc.HecErrorCount` | Mapping is a best match (see `XPON-TR181-MAPPING.md`). |
+| 45 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FrameHeaderHECErrors` | `Device.X_RDK_ONT.Gtc.FrameHecErrors` | Mapping is a best match (see `XPON-TR181-MAPPING.md`). |
+| 46 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesSent` | Σ `Device.X_RDK_ONT.Gem.{i}.TransmittedFrames` | Sum over all GEM ports. |
+| 47 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesReceived` | Σ `Device.X_RDK_ONT.Gem.{i}.ReceivedFrames` | Sum over all GEM ports. |
+| 48 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.MICErrors` | `Device.X_RDK_ONT.Ploam.MicErrors` | Direct copy. |
+| 49 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.DownstreamMessageCount` | `Device.X_RDK_ONT.Ploam.RxMessageCount` | Direct copy. |
+| 50 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.UpstreamMessageCount` | `Device.X_RDK_ONT.Ploam.TxMessageCount` | Direct copy. |
+| 51 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.BaselineMessagesReceived` | `Device.X_RDK_ONT.Omci.RxBaseLineMessageCountValid` | Direct copy. |
+| 52 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.ExtendedMessagesReceived` | `Device.X_RDK_ONT.Omci.RxExtendedMessageCountValid` | Direct copy. |
+| 53 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.MICErrors` | `Device.X_RDK_ONT.Omci.MicErrors` | Direct copy. |
+| 54 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries` | *Gem table* | Number of populated `Gem.{i}` rows. |
+| 55 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortID` | `Device.X_RDK_ONT.Gem.{i}.PortId` | Direct copy. |
+| 56 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction` | `Device.X_RDK_ONT.Gem.{i}.TrafficType` | Only *Bidirectional* maps (reported as `bidirectional`); *Unidirectional* is rejected because the HAL omits the direction. |
+| 57 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortType` | `Device.X_RDK_ONT.Gem.{i}.TrafficType` | *Bidirectional* → `unicast`, *Unidirectional* → `multicast`. |
+| 58 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesSent` | `Device.X_RDK_ONT.Gem.{i}.TransmittedFrames` | Direct copy. |
+| 59 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesReceived` | `Device.X_RDK_ONT.Gem.{i}.ReceivedFrames` | Direct copy. |
+| 60 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PerformanceThresholds.SignalFail` | `Device.X_RDK_ONT.PhysicalMedia.{i}.PerformanceThreshold.SignalFail` | Direct copy. |
+| 61 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PerformanceThresholds.SignalDegrade` | `Device.X_RDK_ONT.PhysicalMedia.{i}.PerformanceThreshold.SignalDegrade` | Direct copy. |
+| 62 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LOS` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.LOS` | *Active* → true. |
+| 63 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LOF` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.LOF` | *Active* → true. |
+| 64 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SF` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.SF` | *Active* → true. |
+| 65 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SD` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.SD` | *Active* → true. |
+| 66 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LCDG` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.LCDG` | *Active* → true. |
+| 67 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.TF` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.TF` | *Active* → true. |
+| 68 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SUF` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.SUF` | *Active* → true. |
+| 69 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.MEM` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.MEM` | *Active* → true. |
+| 70 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.DACT` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.DACT` | *Active* → true. |
+| 71 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.DIS` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.DIS` | *Active* → true. |
+| 72 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.MIS` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.MIS` | *Active* → true. |
+| 73 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.PEE` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.PEE` | *Active* → true. |
+| 74 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.RDI` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.RDI` | *Active* → true. |
+| 75 | `Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.ROGUE` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Alarm.ROGUE` | *Active* → true. |
+| 76 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.ID` | *PhysicalMedia row index* | Direct copy. |
+| 77 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Identifier` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Cage` | *SFP* → 3; *BoB* is rejected. |
+| 78 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorName` | `Device.X_RDK_ONT.PhysicalMedia.{i}.ModuleVendor` | Direct copy. |
+| 79 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorPartNumber` | `Device.X_RDK_ONT.PhysicalMedia.{i}.ModuleName` | Direct copy. |
+| 80 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorRevision` | `Device.X_RDK_ONT.PhysicalMedia.{i}.ModuleVersion` | Direct copy. |
+| 81 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.PONMode` | `Device.X_RDK_ONT.PhysicalMedia.{i}.PonMode` | Mapped to *G-PON*, *XG-PON*, *NG-PON2*, *XGS-PON*; `Unknown` if `PonModeValid` is false. |
+| 82 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Connector` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Connector` | Direct copy. |
+| 83 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.NominalBitRateDownstream` | `Device.X_RDK_ONT.PhysicalMedia.{i}.NominalBitRateDownstream` | Passed through without unit conversion. |
+| 84 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.NominalBitRateUpstream` | `Device.X_RDK_ONT.PhysicalMedia.{i}.NominalBitRateUpstream` | Passed through without unit conversion. |
+| 85 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.RxPower` | `Device.X_RDK_ONT.PhysicalMedia.{i}.RxPower.SignalLevel` | Passed through without unit conversion. |
+| 86 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.TxPower` | `Device.X_RDK_ONT.PhysicalMedia.{i}.TxPower.SignalLevel` | Passed through without unit conversion. |
+| 87 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Voltage` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Voltage.VoltageLevel` | Negative values are rejected. |
+| 88 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Bias` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Bias.CurrentBias` | Passed through without unit conversion. |
+| 89 | `Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Temperature` | `Device.X_RDK_ONT.PhysicalMedia.{i}.Temperature.CurrentTemp` | Values below −274 are rejected. |
 
 ### B.2 Unsupported `Device.XPON` with Existing `X_RDK_ONT` Data
 
-These BBF parameters are in Appendix A (they return `RBUS_ERROR_INVALID_OPERATION`), but the data is already in `Device.X_RDK_ONT`. They are candidates for wiring in a later release.
-
-| # | `Device.XPON` Parameter | `Device.X_RDK_ONT` Data | Notes |
-|---|---|---|---|
-| 1 | `Device.XPON.ONU.{i}.ANI.{i}.PONMode` | `Device.X_RDK_ONT.PhysicalMedia.{i}.PonMode` | Same value already served by `Transceiver.{i}.PONMode`; the ANI-level getter is registered as unsupported. |
-| 2 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesSent` | Σ `Device.X_RDK_ONT.Gem.{i}.TransmittedFrames` | Derivable as the sum over all GEM ports; not implemented. |
-| 3 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesReceived` | Σ `Device.X_RDK_ONT.Gem.{i}.ReceivedFrames` | Derivable as the sum over all GEM ports; not implemented. |
+None. The three earlier candidates — `ANI.{i}.PONMode`, `ANI.{i}.TC.PM.GEM.FramesSent` and `ANI.{i}.TC.PM.GEM.FramesReceived` — are now supported (§1.1, B.1). Every remaining Appendix A parameter needs a HAL schema extension or has no source on this platform.
 
 ## References
 
@@ -711,4 +731,3 @@ These BBF parameters are in Appendix A (they return `RBUS_ERROR_INVALID_OPERATIO
 - GPON Manager data model `config/RdkGponManager.xml`
 - RDK → BBF mapping notes `XPON-TR181-MAPPING.md`
 - GPON telemetry design `docs/07_Telemetry_Design.md`
-- EPON Manager telemetry design (`rdk-eponmanager/design_docs/07_Telemetry_Design.md`, `08_TR181_Telemetry_Reference`)

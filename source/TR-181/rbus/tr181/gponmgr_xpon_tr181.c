@@ -3,7 +3,10 @@
  * @brief BBF TR-181 Device.XPON RBUS provider backed by GPON_DML_DATA.
  *
  * Every get locks the DML data, refreshes the HAL table it needs (cached for
- * XPON_CACHE_TTL_SEC, like EPON), fills the RBUS value and returns.
+ * XPON_CACHE_TTL_SEC), fills the RBUS value and returns.
+ * A few values have no HAL field and come from elsewhere: ONU.Enable from the
+ * JSON-HAL client connection state, EthernetUNI.Stats from Linux sysfs, and
+ * names/aliases/LowerLayers/Upstream are constants or computed here.
  * Table rows are kept in sync by xpon_sync(), one table at a time.
  */
 
@@ -13,6 +16,7 @@
 #include "gponmgr_dml_hal.h"
 #include <rbus.h>
 #include <ctype.h>
+#include <net/if.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,7 +28,7 @@
 #define XPON_ANI          "Device.XPON.ONU.1.ANI.1." // Only single ONU and ANI considered for now.
 
 #ifndef XPON_CACHE_TTL_SEC
-#define XPON_CACHE_TTL_SEC 30       /* HAL query cache lifetime in seconds (EPON default); override with -D. */
+#define XPON_CACHE_TTL_SEC 30       /* HAL query cache lifetime in seconds; override with -D. */
 #endif
 
 /** @brief HAL tables that are cached independently. */
@@ -53,19 +57,21 @@ static const char *const g_ifStates[] = {"Up", "Down", "Unknown", "Dormant", "No
 
 static rbusError_t xpon_base_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
 static rbusError_t xpon_unsupported_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
+static rbusError_t xpon_onu_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
 static rbusError_t xpon_veip_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
+static rbusError_t xpon_uni_stats_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
 static rbusError_t xpon_ani_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
 static rbusError_t xpon_activation_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
 static rbusError_t xpon_gtc_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
 static rbusError_t xpon_ploam_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
 static rbusError_t xpon_omci_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
-static rbusError_t xpon_gem_count_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
+static rbusError_t xpon_gem_totals_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
 static rbusError_t xpon_gem_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
 static rbusError_t xpon_threshold_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
 static rbusError_t xpon_alarm_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
 static rbusError_t xpon_transceiver_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options);
-static rbusError_t xpon_ani_set_handler(rbusHandle_t handle, rbusProperty_t property, rbusSetHandlerOptions_t *options);
 static rbusError_t xpon_unsupported_set_handler(rbusHandle_t handle, rbusProperty_t property, rbusSetHandlerOptions_t *options);
+static rbusError_t xpon_readonly_set_handler(rbusHandle_t handle, rbusProperty_t property, rbusSetHandlerOptions_t *options);
 static rbusError_t xpon_subscribe(rbusHandle_t handle, rbusEventSubAction_t action, const char *name, rbusFilter_t filter, int32_t interval, bool *autoPublish);
 static rbusError_t xpon_unsupported_subscribe(rbusHandle_t handle, rbusEventSubAction_t action, const char *name, rbusFilter_t filter, int32_t interval, bool *autoPublish);
 
@@ -80,10 +86,10 @@ static rbusDataElement_t g_elements[] = {
 
     {"Device.XPON.ONUNumberOfEntries", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_base_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
 
-    {"Device.XPON.ONU.{i}.Enable", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, xpon_unsupported_set_handler, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.Enable", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_onu_get_handler, xpon_readonly_set_handler, NULL, NULL, xpon_subscribe, NULL}}, /* Read-only here (BBF R/W): true while the JSON-HAL client is connected. */
     {"Device.XPON.ONU.{i}.PowerCapability", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
     {"Device.XPON.ONU.{i}.PowerStatus", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.Name", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.Name", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_onu_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* CPE-assigned constant "ONU<i>". */
     {"Device.XPON.ONU.{i}.Version", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
     {"Device.XPON.ONU.{i}.EquipmentID", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
     {"Device.XPON.ONU.{i}.SoftwareImageNumberOfEntries", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_base_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
@@ -92,29 +98,29 @@ static rbusDataElement_t g_elements[] = {
 
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Enable", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_veip_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Status", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_veip_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Alias", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, xpon_unsupported_set_handler, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Alias", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_veip_get_handler, xpon_readonly_set_handler, NULL, NULL, xpon_subscribe, NULL}}, /* Read-only: "cpe-" + upper-case VEIP InterfaceName. */
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Name", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_veip_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Description", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, xpon_unsupported_set_handler, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.LastChange", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.LowerLayers", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, xpon_unsupported_set_handler, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Upstream", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Description", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_veip_get_handler, xpon_readonly_set_handler, NULL, NULL, xpon_subscribe, NULL}}, /* Read-only default text built from Alias. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.LastChange", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_veip_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Computed by GPON Manager from VEIP OperationalState changes. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.LowerLayers", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_veip_get_handler, xpon_readonly_set_handler, NULL, NULL, xpon_subscribe, NULL}}, /* Always empty: BBF expects LowerLayers unused for EthernetUNI. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Upstream", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_veip_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Always true: the VEIP is the gateway WAN interface. */
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.ANIs", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_veip_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainID", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_veip_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainName", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_veip_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
 
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.Reset", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, xpon_unsupported_set_handler, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_uni_stats_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Linux sysfs /sys/class/net/<InterfaceName>/statistics/tx_bytes. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_uni_stats_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Linux sysfs /sys/class/net/<InterfaceName>/statistics/rx_bytes. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_uni_stats_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Linux sysfs /sys/class/net/<InterfaceName>/statistics/tx_packets. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_uni_stats_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Linux sysfs /sys/class/net/<InterfaceName>/statistics/rx_packets. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_uni_stats_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Linux sysfs /sys/class/net/<InterfaceName>/statistics/tx_errors. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_uni_stats_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Linux sysfs /sys/class/net/<InterfaceName>/statistics/rx_errors. */
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.UnicastPacketsSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_uni_stats_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Linux sysfs /sys/class/net/<InterfaceName>/statistics/tx_dropped. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_uni_stats_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Linux sysfs /sys/class/net/<InterfaceName>/statistics/rx_dropped. */
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.MulticastPacketsSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.UnicastPacketsReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.MulticastPacketsReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.MulticastPacketsReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_uni_stats_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Linux sysfs /sys/class/net/<InterfaceName>/statistics/multicast. */
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BroadcastPacketsSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BroadcastPacketsReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
     {"Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.UnknownProtoPacketsReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
@@ -125,14 +131,14 @@ static rbusDataElement_t g_elements[] = {
     {"Device.XPON.ONU.{i}.SoftwareImage.{i}.IsActive", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
     {"Device.XPON.ONU.{i}.SoftwareImage.{i}.IsValid", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
 
-    {"Device.XPON.ONU.{i}.ANI.{i}.Enable", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, xpon_ani_set_handler, NULL, NULL, xpon_subscribe, NULL}}, /* Not supported without WAN_MANAGER_UNIFICATION_ENABLED; access logs a warning. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.Enable", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, xpon_readonly_set_handler, NULL, NULL, xpon_subscribe, NULL}}, /* Read-only (BBF R/W): writing would switch the PON link off. Get needs WAN_MANAGER_UNIFICATION_ENABLED. */
     {"Device.XPON.ONU.{i}.ANI.{i}.Status", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
-    {"Device.XPON.ONU.{i}.ANI.{i}.Alias", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, xpon_ani_set_handler, NULL, NULL, xpon_subscribe, NULL}}, /* Not supported without WAN_MANAGER_UNIFICATION_ENABLED; access logs a warning. */
-    {"Device.XPON.ONU.{i}.ANI.{i}.Name", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.Alias", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, xpon_readonly_set_handler, NULL, NULL, xpon_subscribe, NULL}}, /* Read-only. Get not supported without WAN_MANAGER_UNIFICATION_ENABLED; access logs a warning. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.Name", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* CPE-assigned constant "ANI<i>". */
     {"Device.XPON.ONU.{i}.ANI.{i}.LastChange", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Not supported without WAN_MANAGER_UNIFICATION_ENABLED; access logs a warning. */
-    {"Device.XPON.ONU.{i}.ANI.{i}.PONMode", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.PONMode", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* HAL PhysicalMedia.PonMode of the active medium; "Unknown" if not valid. */
     {"Device.XPON.ONU.{i}.ANI.{i}.TransceiverNumberOfEntries", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
-    {"Device.XPON.ONU.{i}.ANI.{i}.SFPReferenceList", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.SFPReferenceList", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Always empty: Device.SFPs.SFPCage is not implemented on this platform. */
 
     {"Device.XPON.ONU.{i}.ANI.{i}.Stats.BytesSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
     {"Device.XPON.ONU.{i}.ANI.{i}.Stats.BytesReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
@@ -166,8 +172,8 @@ static rbusDataElement_t g_elements[] = {
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.HeaderHECErrorCount", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gtc_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.UnknownProfile", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
 
-    {"Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
-    {"Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_totals_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Sum of HAL Gem.{i}.TransmittedFrames. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_totals_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Sum of HAL Gem.{i}.ReceivedFrames. */
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FrameHeaderHECErrors", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gtc_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.KeyErrors", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
 
@@ -180,11 +186,11 @@ static rbusDataElement_t g_elements[] = {
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.ExtendedMessagesReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_omci_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.MICErrors", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_omci_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
 
-    {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_count_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
+    {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_totals_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
 
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortID", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Unidirectional mapping is not supported yet: HAL omits the traffic direction. */
-    {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortType", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortType", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* From HAL Gem.{i}.TrafficType: Bidirectional -> unicast, Unidirectional -> multicast. */
 
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
@@ -205,11 +211,11 @@ static rbusDataElement_t g_elements[] = {
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.MIS", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_alarm_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.PEE", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_alarm_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.RDI", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_alarm_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
-    {"Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LODS", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LODS", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no HAL LODS alarm (LOF is not equivalent). */
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.ROGUE", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_alarm_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
 
     {"Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.ID", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_transceiver_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
-    {"Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Identifier", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_unsupported_get_handler, NULL, NULL, NULL, xpon_unsupported_subscribe, NULL}}, /* Not supported yet: no equivalent unified HAL field. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Identifier", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_transceiver_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* 3 (SFP, SFF-8024) when HAL Cage is SFP; rejected otherwise. */
     {"Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorName", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_transceiver_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorPartNumber", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_transceiver_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorRevision", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_transceiver_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
@@ -351,8 +357,42 @@ static DML_PHY_MEDIA *xpon_active_phy(GPON_DML_DATA *data)
     return count == 1 ? only : activeCount == 1 ? active : NULL;
 }
 
+/**
+ * @brief Set the BBF PONMode from HAL PhysicalMedia.PonMode.
+ * @param value Value to set.
+ * @param media PhysicalMedia row, or NULL when no unique medium exists.
+ * @return RBUS_ERROR_SUCCESS ("Unknown" if @p media is NULL or PonModeValid is false), or XPON_BAD_VALUE.
+ */
+static rbusError_t xpon_set_pon_mode(rbusValue_t value, const DML_PHY_MEDIA *media)
+{
+    static const char *const modes[] = {"G-PON", "XG-PON", "NG-PON2", "XGS-PON"};
+
+    if (!media || !media->PonModeValid)
+    {
+        rbusValue_SetString(value, "Unknown");
+        return RBUS_ERROR_SUCCESS;
+    }
+    return xpon_set_enum(value, media->PonMode, modes, XPON_COUNT(modes));
+}
+
+/**
+ * @brief Read the instance number that follows @p table in an RBUS name.
+ * @param name  Full parameter name.
+ * @param table Table segment including dots, e.g. ".ONU.".
+ * @return Instance number, or 0 if not found.
+ */
+static uint32_t xpon_instance(const char *name, const char *table)
+{
+    const char *row = strstr(name, table);
+    unsigned int instance = 0;
+
+    if (!row || sscanf(row + strlen(table), "%u", &instance) != 1)
+        return 0;
+    return instance;
+}
+
 /* ---------------------------------------------------------------------- *
- * HAL query cache (EPON-style TTL)                                        *
+ * HAL query cache (TTL)                                                  *
  * ---------------------------------------------------------------------- */
 
 /**
@@ -396,21 +436,6 @@ static rbusError_t xpon_hal_get(GPON_DML_DATA *data, XponHalTable table)
     pthread_mutex_unlock(&g_cacheMutex);
     return RBUS_ERROR_SUCCESS;
 }
-
-#if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-/**
- * @brief Mark one HAL table stale so the next get reads the HAL.
- * @param table HAL table to invalidate.
- * @note Only the ANI set path (WAN_MANAGER_UNIFICATION_ENABLED) uses this.
- */
-static void xpon_cache_invalidate(XponHalTable table)
-{
-    pthread_mutex_lock(&g_cacheMutex);
-    g_cache[table].valid = false;
-    g_cache[table].timestamp = 0;
-    pthread_mutex_unlock(&g_cacheMutex);
-}
-#endif
 
 /**
  * @brief Mark every HAL table stale (e.g. on ONU state change).
@@ -473,6 +498,45 @@ static rbusError_t xpon_base_get_handler(rbusHandle_t handle, rbusProperty_t pro
 }
 
 /**
+ * @brief Get handler for ONU.{i}.Enable and ONU.{i}.Name.
+ *
+ * Enable reflects the JSON-HAL client connection (json_hal_is_client_connected());
+ * Name is the CPE-assigned constant "ONU<i>". Neither needs a HAL table read.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS           Value set.
+ * @retval RBUS_ERROR_INVALID_OPERATION Unknown parameter.
+ */
+static rbusError_t xpon_onu_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
+{
+    const char *name = rbusProperty_GetName(property);
+    const char *param = strrchr(name, '.') + 1;
+    rbusValue_t value;
+    rbusError_t rc = RBUS_ERROR_SUCCESS;
+    char text[16];
+    (void)handle;
+    (void)options;
+
+    rbusValue_Init(&value);
+    if (strcmp(param, "Enable") == 0)
+        rbusValue_SetBoolean(value, json_hal_is_client_connected() != 0);
+    else if (strcmp(param, "Name") == 0)
+    {
+        snprintf(text, sizeof(text), "ONU%u", xpon_instance(name, ".ONU."));
+        rbusValue_SetString(value, text);
+    }
+    else
+        rc = RBUS_ERROR_INVALID_OPERATION;
+
+    if (rc == RBUS_ERROR_SUCCESS)
+        rbusProperty_SetValue(property, value);
+    rbusValue_Release(value);
+    return rc;
+}
+
+/**
  * @brief Get handler for ONU.{i}.ANI.{i}.Transceiver.{i}.* parameters.
  * @param handle   RBUS handle (unused).
  * @param property Property being read; its value is set on success.
@@ -485,7 +549,6 @@ static rbusError_t xpon_base_get_handler(rbusHandle_t handle, rbusProperty_t pro
  */
 static rbusError_t xpon_transceiver_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
-    static const char *const modes[] = {"G-PON", "XG-PON", "NG-PON2", "XGS-PON"};
     static const char *const connectors[] = {"LC", "ST", "FC", "SC", "MT-RJ"};
     const char *name = rbusProperty_GetName(property);
     const char *param = strrchr(name, '.') + 1;
@@ -555,7 +618,14 @@ static rbusError_t xpon_transceiver_get_handler(rbusHandle_t handle, rbusPropert
             rbusValue_SetUInt32(value, (uint32_t)media->Voltage.VoltageLevel);
     }
     else if (strcmp(param, "PONMode") == 0)
-        rc = xpon_set_enum(value, media->PonMode, modes, XPON_COUNT(modes));
+        rc = xpon_set_pon_mode(value, media);
+    else if (strcmp(param, "Identifier") == 0)
+    {
+        if (media->Cage == SFP)
+            rbusValue_SetUInt32(value, 3);                          /* SFF-8024 Table 4-1: 03h = SFP/SFP+/SFP28. */
+        else
+            rc = RBUS_ERROR_INVALID_OPERATION;                      /* BoB: no pluggable module identifier. */
+    }
     else if (strcmp(param, "Connector") == 0)
         rc = xpon_set_enum(value, media->Connector, connectors, XPON_COUNT(connectors));
     else
@@ -569,7 +639,8 @@ static rbusError_t xpon_transceiver_get_handler(rbusHandle_t handle, rbusPropert
 }
 
 /**
- * @brief Get handler for ONU.{i}.ANI.{i}.* (Status, TransceiverNumberOfEntries, Enable, Alias, LastChange).
+ * @brief Get handler for ONU.{i}.ANI.{i}.* (Name, PONMode, SFPReferenceList, Status, TransceiverNumberOfEntries, Enable, Alias, LastChange).
+ * @note Name ("ANI<i>") and SFPReferenceList ("") are constants; PONMode comes from HAL PhysicalMedia.PonMode.
  * @note Enable, Alias and LastChange need WAN_MANAGER_UNIFICATION_ENABLED.
  * @param handle   RBUS handle (unused).
  * @param property Property being read; its value is set on success.
@@ -592,6 +663,20 @@ static rbusError_t xpon_ani_get_handler(rbusHandle_t handle, rbusProperty_t prop
     (void)handle;
     (void)options;
 
+    /* CPE-assigned constants: answered without the HAL. */
+    if (strcmp(param, "Name") == 0 || strcmp(param, "SFPReferenceList") == 0)
+    {
+        char text[16] = "";
+
+        if (strcmp(param, "Name") == 0)
+            snprintf(text, sizeof(text), "ANI%u", xpon_instance(rbusProperty_GetName(property), ".ANI."));
+        rbusValue_Init(&value);
+        rbusValue_SetString(value, text);                           /* SFPReferenceList: no Device.SFPs.SFPCage table. */
+        rbusProperty_SetValue(property, value);
+        rbusValue_Release(value);
+        return RBUS_ERROR_SUCCESS;
+    }
+
     data = GponMgrDml_GetData_locked();
     if (!data)
         return RBUS_ERROR_NOT_INITIALIZED;
@@ -610,6 +695,8 @@ static rbusError_t xpon_ani_get_handler(rbusHandle_t handle, rbusProperty_t prop
                 ++count;
         rbusValue_SetUInt32(value, count);
     }
+    else if (strcmp(param, "PONMode") == 0)
+        rc = xpon_set_pon_mode(value, media);                       /* "Unknown" without one active medium. */
     else if (!media)
         rc = RBUS_ERROR_INVALID_OPERATION;                          /* Remaining parameters need one active medium. */
     else if (strcmp(param, "Status") == 0)
@@ -976,18 +1063,24 @@ static rbusError_t xpon_omci_get_handler(rbusHandle_t handle, rbusProperty_t pro
 }
 
 /**
- * @brief Get handler for ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries.
+ * @brief Get handler for ANI.{i}.TC.GEM.PortNumberOfEntries and ANI.{i}.TC.PM.GEM.FramesSent/FramesReceived.
+ *
+ * PortNumberOfEntries counts populated HAL Gem rows; FramesSent/FramesReceived sum
+ * HAL Gem.{i}.TransmittedFrames / ReceivedFrames across all rows.
+ *
  * @param handle   RBUS handle (unused).
- * @param property Property being read; set to the number of populated GEM rows.
+ * @param property Property being read; its value is set on success.
  * @param options  Get options (unused).
  * @retval RBUS_ERROR_SUCCESS                     Value set.
  * @retval RBUS_ERROR_NOT_INITIALIZED             DML data not available.
  * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE GEM HAL read failed.
  */
-static rbusError_t xpon_gem_count_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
+static rbusError_t xpon_gem_totals_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
+    const char *param = strrchr(rbusProperty_GetName(property), '.') + 1;
     GPON_DML_DATA *data;
     rbusValue_t value;
+    uint64_t sent = 0, received = 0;
     uint32_t count = 0;
     size_t i;
     (void)handle;
@@ -1003,11 +1096,20 @@ static rbusError_t xpon_gem_count_get_handler(rbusHandle_t handle, rbusProperty_
     }
     for (i = 0; i < GPON_DATA_MAX_GEM; ++i)
         if (data->gpon.Gem.pdata[i])
+        {
             ++count;
+            sent += data->gpon.Gem.pdata[i]->dml.TransmittedFrames;
+            received += data->gpon.Gem.pdata[i]->dml.ReceivedFrames;
+        }
     GponMgrDml_GetData_release(data);
 
     rbusValue_Init(&value);
-    rbusValue_SetUInt32(value, count);
+    if (strcmp(param, "FramesSent") == 0)
+        rbusValue_SetUInt64(value, sent);
+    else if (strcmp(param, "FramesReceived") == 0)
+        rbusValue_SetUInt64(value, received);
+    else
+        rbusValue_SetUInt32(value, count);
     rbusProperty_SetValue(property, value);
     rbusValue_Release(value);
     return RBUS_ERROR_SUCCESS;
@@ -1024,6 +1126,7 @@ static rbusError_t xpon_gem_count_get_handler(rbusHandle_t handle, rbusProperty_
  * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST      No GEM row for this instance.
  * @retval RBUS_ERROR_INVALID_OPERATION           Direction is not bidirectional.
  * @retval XPON_BAD_VALUE                         PortID > 65534.
+ * @note PortType is derived from HAL TrafficType (Bidirectional -> unicast, Unidirectional -> multicast).
  */
 static rbusError_t xpon_gem_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
@@ -1077,6 +1180,9 @@ static rbusError_t xpon_gem_get_handler(rbusHandle_t handle, rbusProperty_t prop
         else
             rbusValue_SetString(value, "bidirectional");
     }
+    else if (strcmp(param, "PortType") == 0)
+        /* HAL TrafficType heuristic: bidirectional GEM ports carry unicast, unidirectional (downstream) ones multicast. */
+        rbusValue_SetString(value, gem->TrafficType == Bidirectional ? "unicast" : "multicast");
     else
         rc = RBUS_ERROR_INVALID_OPERATION;
 
@@ -1088,7 +1194,35 @@ static rbusError_t xpon_gem_get_handler(rbusHandle_t handle, rbusProperty_t prop
 }
 
 /**
+ * @brief Build the read-only EthernetUNI alias "cpe-" + upper-case VEIP InterfaceName.
+ * @param veip VEIP row.
+ * @param buf  Output buffer (at least 65 bytes for the BBF 64-character limit).
+ * @param size Size of @p buf.
+ * @return RBUS_ERROR_SUCCESS, or XPON_BAD_VALUE if the result exceeds 64 characters.
+ * @note Falls back to "cpe-VEIP<i>" when InterfaceName is empty.
+ */
+static rbusError_t xpon_veip_alias(const DML_VEIP *veip, char *buf, size_t size)
+{
+    size_t i, length = strnlen(veip->InterfaceName, sizeof(veip->InterfaceName));
+    int written;
+
+    if (length == 0)
+        written = snprintf(buf, size, "cpe-VEIP%lu", (unsigned long)veip->uInstanceNumber);
+    else if (length == sizeof(veip->InterfaceName))
+        return XPON_BAD_VALUE;
+    else
+        written = snprintf(buf, size, "cpe-%s", veip->InterfaceName);
+    if (written < 0 || (size_t)written >= size || written > 64)
+        return XPON_BAD_VALUE;
+    for (i = 4; buf[i]; ++i)
+        buf[i] = (char)toupper((unsigned char)buf[i]);
+    return RBUS_ERROR_SUCCESS;
+}
+
+/**
  * @brief Get handler for ONU.{i}.EthernetUNI.{i}.* parameters backed by VEIP rows.
+ * @note Alias, Description, LowerLayers and Upstream are computed here; LastChange uses
+ *       DML_VEIP.LastChangeTime, stamped by the middle layer on OperationalState changes.
  * @param handle   RBUS handle (unused).
  * @param property Property being read; its value is set on success.
  * @param options  Get options (unused).
@@ -1153,6 +1287,31 @@ static rbusError_t xpon_veip_get_handler(rbusHandle_t handle, rbusProperty_t pro
     }
     else if (strcmp(param, "ANIs") == 0)
         rbusValue_SetString(value, "Device.XPON.ONU.1.ANI.1");
+    else if (strcmp(param, "Alias") == 0 || strcmp(param, "Description") == 0)
+    {
+        char alias[65], text[96];
+
+        rc = xpon_veip_alias(veip, alias, sizeof(alias));
+        if (rc == RBUS_ERROR_SUCCESS)
+        {
+            if (strcmp(param, "Alias") == 0)
+                rbusValue_SetString(value, alias);
+            else
+            {
+                snprintf(text, sizeof(text), "GPON VEIP WAN interface %s", alias);
+                rbusValue_SetString(value, text);
+            }
+        }
+    }
+    else if (strcmp(param, "LastChange") == 0)
+    {
+        ULONG now = GponMgrDml_GetMonotonicSeconds();
+        rbusValue_SetUInt32(value, now >= veip->LastChangeTime ? (uint32_t)(now - veip->LastChangeTime) : 0);
+    }
+    else if (strcmp(param, "LowerLayers") == 0)
+        rbusValue_SetString(value, "");                             /* BBF: LowerLayers not expected to be used for EthernetUNI. */
+    else if (strcmp(param, "Upstream") == 0)
+        rbusValue_SetBoolean(value, true);                          /* The VEIP is always the gateway WAN side. */
     else
         rc = RBUS_ERROR_INVALID_OPERATION;
 
@@ -1161,6 +1320,107 @@ static rbusError_t xpon_veip_get_handler(rbusHandle_t handle, rbusProperty_t pro
     rbusValue_Release(value);
     GponMgrDml_GetData_release(data);
     return rc;
+}
+
+/**
+ * @brief Get handler for ONU.{i}.EthernetUNI.{i}.Stats.* backed by Linux sysfs.
+ *
+ * Reads /sys/class/net/<VEIP InterfaceName>/statistics/<counter>. The interface
+ * name is copied under the DML lock; sysfs is read after the lock is released.
+ * 32-bit BBF counters (Errors*, Discard*) are truncated and wrap.
+ *
+ * @param handle   RBUS handle (unused).
+ * @param property Property being read; its value is set on success.
+ * @param options  Get options (unused).
+ * @retval RBUS_ERROR_SUCCESS                     Value set.
+ * @retval RBUS_ERROR_NOT_INITIALIZED             DML data not available.
+ * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE VEIP HAL read failed.
+ * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST      No VEIP row for this instance.
+ * @retval RBUS_ERROR_INVALID_OPERATION           Unknown counter, invalid interface name, or sysfs not readable.
+ */
+static rbusError_t xpon_uni_stats_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
+{
+    static const struct
+    {
+        const char *param;
+        const char *file;
+        bool wide;              /* true: unsignedLong (64-bit) BBF counter. */
+    } counters[] = {
+        {"BytesSent", "tx_bytes", true},          {"BytesReceived", "rx_bytes", true},
+        {"PacketsSent", "tx_packets", true},      {"PacketsReceived", "rx_packets", true},
+        {"ErrorsSent", "tx_errors", false},       {"ErrorsReceived", "rx_errors", false},
+        {"DiscardPacketsSent", "tx_dropped", false}, {"DiscardPacketsReceived", "rx_dropped", false},
+        {"MulticastPacketsReceived", "multicast", true},
+    };
+    const char *name = rbusProperty_GetName(property);
+    const char *param = strrchr(name, '.') + 1;
+    uint32_t instance = xpon_instance(name, ".EthernetUNI.");
+    GPON_DML_DATA *data;
+    char ifName[IFNAMSIZ] = "", path[128];
+    unsigned long long counter = 0;
+    rbusValue_t value;
+    size_t i, entry;
+    bool found = false;
+    FILE *file;
+    (void)handle;
+    (void)options;
+
+    for (entry = 0; entry < XPON_COUNT(counters); ++entry)
+        if (strcmp(param, counters[entry].param) == 0)
+            break;
+    if (entry == XPON_COUNT(counters))
+        return RBUS_ERROR_INVALID_OPERATION;
+
+    data = GponMgrDml_GetData_locked();
+    if (!data)
+        return RBUS_ERROR_NOT_INITIALIZED;
+    if (xpon_hal_get(data, XPON_HAL_VEIP) != RBUS_ERROR_SUCCESS)
+    {
+        GponMgrDml_GetData_release(data);
+        return RBUS_ERROR_DESTINATION_RESPONSE_FAILURE;
+    }
+    for (i = 0; i < GPON_DATA_MAX_VEIP && !found; ++i)
+        if (data->gpon.Veip.pdata[i] && data->gpon.Veip.pdata[i]->dml.uInstanceNumber == instance)
+        {
+            const char *source = data->gpon.Veip.pdata[i]->dml.InterfaceName;
+            size_t length = strnlen(source, sizeof(data->gpon.Veip.pdata[i]->dml.InterfaceName));
+            found = true;
+            if (length < sizeof(ifName))
+            {
+                memcpy(ifName, source, length);
+                ifName[length] = '\0';
+            }
+        }
+    GponMgrDml_GetData_release(data);
+    if (!found)
+        return RBUS_ERROR_ELEMENT_DOES_NOT_EXIST;
+
+    /* The name comes from the HAL: reject anything that could escape /sys/class/net. */
+    if (ifName[0] == '\0' || strchr(ifName, '/') || strcmp(ifName, ".") == 0 || strcmp(ifName, "..") == 0)
+    {
+        CcspTraceWarning(("XPON: %s: invalid VEIP interface name\n", name));
+        return RBUS_ERROR_INVALID_OPERATION;
+    }
+    snprintf(path, sizeof(path), "/sys/class/net/%s/statistics/%s", ifName, counters[entry].file);
+    file = fopen(path, "r");
+    if (!file)
+    {
+        CcspTraceWarning(("XPON: %s: cannot open %s\n", name, path));
+        return RBUS_ERROR_INVALID_OPERATION;
+    }
+    found = fscanf(file, "%llu", &counter) == 1;
+    fclose(file);
+    if (!found)
+        return RBUS_ERROR_INVALID_OPERATION;
+
+    rbusValue_Init(&value);
+    if (counters[entry].wide)
+        rbusValue_SetUInt64(value, (uint64_t)counter);
+    else
+        rbusValue_SetUInt32(value, (uint32_t)counter);
+    rbusProperty_SetValue(property, value);
+    rbusValue_Release(value);
+    return RBUS_ERROR_SUCCESS;
 }
 
 /**
@@ -1183,73 +1443,19 @@ static rbusError_t xpon_unsupported_get_handler(rbusHandle_t handle, rbusPropert
  * ---------------------------------------------------------------------- */
 
 /**
- * @brief Set handler for ONU.{i}.ANI.{i}.Enable (bool) and Alias (string).
- *
- * Writes through GponHal_setParam() to Device.X_RDK_ONT.PhysicalMedia.{i}.
- * Needs WAN_MANAGER_UNIFICATION_ENABLED; otherwise always rejected.
- *
+ * @brief Set handler for supported parameters that GPON Manager exposes read-only
+ *        (ONU.Enable, EthernetUNI.Alias/Description/LowerLayers, ANI.Enable/Alias).
  * @param handle   RBUS handle (unused).
- * @param property Property with the new value.
- * @param options  Set options; only committed, sessionless writes are accepted.
- * @retval RBUS_ERROR_SUCCESS                     HAL updated.
- * @retval RBUS_ERROR_INVALID_PARAMETER_TYPE      Wrong value type.
- * @retval RBUS_ERROR_INVALID_PARAMETER_VALUE     Alias empty, too long or not starting with a letter.
- * @retval RBUS_ERROR_NOT_INITIALIZED             DML data not available.
- * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE HAL read or write failed.
- * @retval RBUS_ERROR_INVALID_OPERATION           Transactional write, no unique active medium, or feature disabled.
+ * @param property Property with the new value (ignored).
+ * @param options  Set options (unused).
+ * @return Always RBUS_ERROR_NOT_WRITABLE.
  */
-static rbusError_t xpon_ani_set_handler(rbusHandle_t handle, rbusProperty_t property, rbusSetHandlerOptions_t *options)
+static rbusError_t xpon_readonly_set_handler(rbusHandle_t handle, rbusProperty_t property, rbusSetHandlerOptions_t *options)
 {
-    const char *name = rbusProperty_GetName(property);
-#if defined(WAN_MANAGER_UNIFICATION_ENABLED)
-    const char *param = strrchr(name, '.') + 1;
-    bool alias = strcmp(param, "Alias") == 0;
-    rbusValue_t value = rbusProperty_GetValue(property);
-    const char *text = NULL;
-    GPON_DML_DATA *data;
-    DML_PHY_MEDIA *media;
-    rbusError_t rc = RBUS_ERROR_SUCCESS;
-    (void)handle;
-
-    if (!value || rbusValue_GetType(value) != (alias ? RBUS_STRING : RBUS_BOOLEAN))
-        return RBUS_ERROR_INVALID_PARAMETER_TYPE;
-    if (options && (options->sessionId || !options->commit))         /* Only one-shot committed writes. */
-        return RBUS_ERROR_INVALID_OPERATION;
-    if (alias)
-    {
-        text = rbusValue_GetString(value, NULL);
-        if (!text || !isalpha((unsigned char)text[0]) || strlen(text) > 64)   /* BBF Alias starts with a letter. */
-            return RBUS_ERROR_INVALID_PARAMETER_VALUE;
-    }
-
-    data = GponMgrDml_GetData_locked();
-    if (!data)
-        return RBUS_ERROR_NOT_INITIALIZED;
-    if (xpon_hal_get(data, XPON_HAL_PM) != RBUS_ERROR_SUCCESS)
-        rc = RBUS_ERROR_DESTINATION_RESPONSE_FAILURE;
-    else if (!(media = xpon_active_phy(data)))
-        rc = RBUS_ERROR_INVALID_OPERATION;
-    else
-    {
-        char halName[RBUS_MAX_NAME_LENGTH];
-        char halValue[65];
-        /* Write through the existing X_RDK_ONT HAL parameter for this medium. */
-        snprintf(halName, sizeof(halName), "Device.X_RDK_ONT.PhysicalMedia.%lu.%s",
-                 (unsigned long)media->uInstanceNumber, param);
-        snprintf(halValue, sizeof(halValue), "%s", alias ? text : rbusValue_GetBoolean(value) ? "true" : "false");
-        if (GponHal_setParam(halName, alias ? PARAM_STRING : PARAM_BOOLEAN, halValue) != ANSC_STATUS_SUCCESS)
-            rc = RBUS_ERROR_DESTINATION_RESPONSE_FAILURE;
-        else
-            xpon_cache_invalidate(XPON_HAL_PM);                     /* Next get reads the new value. */
-    }
-    GponMgrDml_GetData_release(data);
-    return rc;
-#else
     (void)handle;
     (void)options;
-    CcspTraceWarning(("XPON: %s requires WAN_MANAGER_UNIFICATION_ENABLED\n", name));
-    return RBUS_ERROR_INVALID_OPERATION;
-#endif
+    CcspTraceWarning(("XPON: %s is read-only\n", rbusProperty_GetName(property)));
+    return RBUS_ERROR_NOT_WRITABLE;
 }
 
 /**

@@ -7,7 +7,7 @@ Compared sources:
 - [config/RdkGponManager.xml](config/RdkGponManager.xml): the complete `Device.X_RDK_ONT.` tree.
 - [tr-181-2-21-0-cwmp-full.xml](tr-181-2-21-0-cwmp-full.xml#L123491): **only `Device.XPON.` and its descendants**, in the supplied BBF `Device:2.21` CWMP model. This comparison does not claim that this is the latest published BBF revision.
 
-This is an XML contract comparison, not verification of C callbacks, HAL values, or runtime support. A proposed equivalent is not proof that the implementations use the same units, reset behavior, or instance association. "Absent" means absent from the compared XML subtree, not from all of TR-181 or the device.
+This is an XML contract comparison, not verification of C callbacks, HAL values, or runtime support. A proposed equivalent is not proof that the implementations use the same units, reset behavior, or instance association. "Absent" means absent from the compared XML subtree, not from all of TR-181 or the device. The `Device.XPON` parameters GPON Manager actually serves, and the source of each value (HAL, Linux sysfs, JSON-HAL connection state, constant or computed), are listed in [docs/08_TR181_Telemetry_Reference.md](docs/08_TR181_Telemetry_Reference.md) §1.1 and Appendix A.
 
 Access is written as **read-only** or **read-write**. RDK parameters without `<writable>true</writable>` are treated as read-only. Parameters marked `WAN_MANAGER_UNIFICATION_ENABLED` exist only when that build option is enabled. RDK `uint32/mapped` fields expose strings backed by numeric enum codes; those codes are not BBF string values.
 

@@ -18,6 +18,7 @@
 */
 
 
+#include <time.h>
 #include "gponmgr_dml_data.h"
 
 
@@ -317,6 +318,7 @@ void GponMgrDml_SetDefaultVeip(DML_VEIP_CTRL_T* gponVeipData)
         gponVeip->MeId = 0;
         gponVeip->AdministrativeState = Lock;
         gponVeip->OperationalState = veip_Unknown;
+        gponVeip->LastChangeTime = GponMgrDml_GetMonotonicSeconds();
         memset(gponVeip->InterDomainName, 0, 25);
         memset(gponVeip->InterfaceName, 0, 256);
         
@@ -455,6 +457,18 @@ ANSC_STATUS GponMgrDml_addGem(DML_GEM_LIST_T* gponGemList, int gem_index)
     }    
    
     return result;  
+}
+
+/**
+ * @brief Seconds from CLOCK_MONOTONIC, immune to NTP/wall-clock jumps.
+ * @return Monotonic time in seconds.
+ */
+ULONG GponMgrDml_GetMonotonicSeconds(void)
+{
+    struct timespec now;
+
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (ULONG)now.tv_sec;
 }
 
 ANSC_STATUS GponMgrDml_addVeip(DML_VEIP_LIST_T* gponVeipList, int veip_index)

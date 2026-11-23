@@ -133,6 +133,7 @@ void GponMgrDml_SetDefaultData(GPON_DML_DATA* pGponData);
 ANSC_STATUS GponMgrDml_addPhysicalMedia(DML_PHY_MEDIA_LIST_T* gponPhyList, int pm_index);
 ANSC_STATUS GponMgrDml_addGem(DML_GEM_LIST_T* gponGemList, int gem_index);
 ANSC_STATUS GponMgrDml_addVeip(DML_VEIP_LIST_T* gponVeipList, int veip_index);
+ULONG GponMgrDml_GetMonotonicSeconds(void);
 
 
 
