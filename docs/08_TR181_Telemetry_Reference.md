@@ -61,6 +61,8 @@ Registered as an RBUS provider by `source/TR-181/rbus/tr181/gponmgr_xpon_tr181.c
 
 > **Data sources:** each description ends with **Source:**, which says where the value is read: *HAL* (`Device.X_RDK_ONT.*` through the JSON-HAL client, cached per table for `XPON_CACHE_TTL_SEC`, default 30 s), *Linux sysfs* (`/sys/class/net/<if>/statistics/*`, read on every get), the *JSON-HAL client connection state*, a *constant* in GPON Manager, or a value *computed by GPON Manager* from HAL data.
 
+> **Value deviation:** `TC.GEM.Port.{i}.Direction` reports `unidirectional` (not in the BBF enumeration) for a Unidirectional GEM port, because the HAL gives no direction.
+>
 > **Read-only deviations:** `ONU.{i}.Enable`, `ANI.{i}.Enable`, `EthernetUNI.{i}.Alias`, `EthernetUNI.{i}.Description`, `EthernetUNI.{i}.LowerLayers` and `ANI.{i}.Alias` are writable in BBF but read-only here; a set returns `RBUS_ERROR_NOT_WRITABLE`.
 
 > **Instances:** only `ONU.1` and `ANI.1` exist. `EthernetUNI.{i}`, `ANI.1.Transceiver.{i}` and `TC.GEM.Port.{i}` follow the populated `Veip`, `PhysicalMedia` and `Gem` rows. ANI-level PhysicalMedia fields need exactly one active PhysicalMedia row. Values are passed through without unit conversion (BBF units: power 0.1 dBm, voltage mV, bias µA, temperature °C, bit rate kbps).
@@ -144,7 +146,7 @@ Registered as an RBUS provider by `source/TR-181/rbus/tr181/gponmgr_xpon_tr181.c
 |---|---|---|---|---|---|
 | 54 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries` | Number of entries in the `Port` table. *Number of populated `Gem.{i}` rows.* **Source:** HAL — number of `Device.X_RDK_ONT.Gem.{i}` rows. | `Gem table` | unsignedInt | Read-Only |
 | 55 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortID` | Identifies a GEM port. **Source:** HAL `Device.X_RDK_ONT.Gem.{i}.PortId`. | `Gem.{i}.PortId` | unsignedInt | Read-Only |
-| 56 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction` | Type of connection this GEM port is used for. *Only Bidirectional* maps; *Unidirectional* is rejected because the HAL omits the direction. **Source:** HAL `Device.X_RDK_ONT.Gem.{i}.TrafficType`. | `Gem.{i}.TrafficType` | string | Read-Only |
+| 56 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction` | Type of connection this GEM port is used for. *`bidirectional` for a Bidirectional port, `unidirectional` for a Unidirectional port. `unidirectional` is not a BBF value: the HAL does not say which way the port carries traffic, so `UNI-to-ANI` / `ANI-to-UNI` are never reported.* **Source:** HAL `Device.X_RDK_ONT.Gem.{i}.TrafficType`. | `Gem.{i}.TrafficType` | string | Read-Only |
 | 57 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortType` | GEM port type. *`unicast` for a Bidirectional port, `multicast` for a Unidirectional (downstream-only) port; `broadcast` is never reported. Heuristic: the HAL has no port-type field.* **Source:** HAL `Device.X_RDK_ONT.Gem.{i}.TrafficType`. | `Gem.{i}.TrafficType` | string | Read-Only |
 | 58 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesSent` | (X)GEM frames transmitted by this (X)GEM port. **Source:** HAL `Device.X_RDK_ONT.Gem.{i}.TransmittedFrames`. | `Gem.{i}.TransmittedFrames` | StatsCounter64 | Read-Only |
 | 59 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesReceived` | (X)GEM frames received by this (X)GEM port. **Source:** HAL `Device.X_RDK_ONT.Gem.{i}.ReceivedFrames`. | `Gem.{i}.ReceivedFrames` | StatsCounter64 | Read-Only |
@@ -684,7 +686,7 @@ Maps each supported `Device.XPON` parameter (§1.1) to the `Device.X_RDK_ONT` pa
 | 53 | `Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.MICErrors` | `Device.X_RDK_ONT.Omci.MicErrors` | Direct copy. |
 | 54 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries` | *Gem table* | Number of populated `Gem.{i}` rows. |
 | 55 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortID` | `Device.X_RDK_ONT.Gem.{i}.PortId` | Direct copy. |
-| 56 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction` | `Device.X_RDK_ONT.Gem.{i}.TrafficType` | Only *Bidirectional* maps (reported as `bidirectional`); *Unidirectional* is rejected because the HAL omits the direction. |
+| 56 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction` | `Device.X_RDK_ONT.Gem.{i}.TrafficType` | *Bidirectional* → `bidirectional`, *Unidirectional* → `unidirectional` (not a BBF value). |
 | 57 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortType` | `Device.X_RDK_ONT.Gem.{i}.TrafficType` | *Bidirectional* → `unicast`, *Unidirectional* → `multicast`. |
 | 58 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesSent` | `Device.X_RDK_ONT.Gem.{i}.TransmittedFrames` | Direct copy. |
 | 59 | `Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesReceived` | `Device.X_RDK_ONT.Gem.{i}.ReceivedFrames` | Direct copy. |

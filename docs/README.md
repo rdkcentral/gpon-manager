@@ -28,6 +28,7 @@ RdkGponManager is the RDK-B component that controls and monitors the xPON (GPON 
 | 07 | [Telemetry Design](07_Telemetry_Design.md) | Telemetry module architecture, API, producers (hooks), threading, build/enablement, verification |
 | 08 | [TR-181 & Telemetry Reference](08_TR181_Telemetry_Reference.md) | Supported `Device.XPON` parameters, `Device.X_RDK_ONT` extensions (only parameters with no BBF equivalent), telemetry event spec, Appendix A (unsupported `Device.XPON`), Appendix B (`Device.XPON` ↔ `Device.X_RDK_ONT` mapping) |
 | 08 | [TR-181 & Telemetry Reference (HTML)](08_TR181_Telemetry_Reference.html) | Same content as a styled, printable HTML page (open in a browser; *Print / Save as PDF*) |
+| 08 | [TR-181 & Telemetry Summary (HTML)](GPON_TR181_Telemetry_Summary.html) | Simplified version for product/cloud teams: supported `Device.XPON` and `Device.X_RDK_ONT` parameters (name, description, type, access, example), telemetry events and XGS-PON state → event mapping with `XPON_ONU_STATE_CHANGE` values |
 | — | [XPON TR-181 Mapping](../XPON-TR181-MAPPING.md) | Field-by-field RDK `X_RDK_ONT` → BBF `Device.XPON` mapping notes |
 
 Numbering follows the EPON Manager `design_docs/` set (07 = telemetry design, 08 = TR-181 & telemetry reference) so that the two PON managers can be read side by side.

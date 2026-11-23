@@ -189,7 +189,7 @@ static rbusDataElement_t g_elements[] = {
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_totals_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
 
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortID", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
-    {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Unidirectional mapping is not supported yet: HAL omits the traffic direction. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* From HAL Gem.{i}.TrafficType: Bidirectional -> bidirectional, Unidirectional -> unidirectional (not a BBF value). */
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortType", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* From HAL Gem.{i}.TrafficType: Bidirectional -> unicast, Unidirectional -> multicast. */
 
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
@@ -1124,9 +1124,9 @@ static rbusError_t xpon_gem_totals_get_handler(rbusHandle_t handle, rbusProperty
  * @retval RBUS_ERROR_NOT_INITIALIZED             DML data not available.
  * @retval RBUS_ERROR_DESTINATION_RESPONSE_FAILURE GEM HAL read failed.
  * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST      No GEM row for this instance.
- * @retval RBUS_ERROR_INVALID_OPERATION           Direction is not bidirectional.
  * @retval XPON_BAD_VALUE                         PortID > 65534.
- * @note PortType is derived from HAL TrafficType (Bidirectional -> unicast, Unidirectional -> multicast).
+ * @note Direction and PortType are derived from HAL TrafficType (Bidirectional -> bidirectional / unicast,
+ *       Unidirectional -> unidirectional (not a BBF value) / multicast).
  */
 static rbusError_t xpon_gem_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
@@ -1174,12 +1174,8 @@ static rbusError_t xpon_gem_get_handler(rbusHandle_t handle, rbusProperty_t prop
     else if (strcmp(param, "FramesReceived") == 0)
         rbusValue_SetUInt64(value, gem->ReceivedFrames);
     else if (strcmp(param, "Direction") == 0)
-    {
-        if (gem->TrafficType != Bidirectional)                      /* HAL does not give the unidirectional orientation. */
-            rc = RBUS_ERROR_INVALID_OPERATION;
-        else
-            rbusValue_SetString(value, "bidirectional");
-    }
+        /* HAL gives no orientation for Unidirectional, so report it as-is: a value outside the BBF enumeration. */
+        rbusValue_SetString(value, gem->TrafficType == Bidirectional ? "bidirectional" : "unidirectional");
     else if (strcmp(param, "PortType") == 0)
         /* HAL TrafficType heuristic: bidirectional GEM ports carry unicast, unidirectional (downstream) ones multicast. */
         rbusValue_SetString(value, gem->TrafficType == Bidirectional ? "unicast" : "multicast");

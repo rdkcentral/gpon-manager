@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPON Manager — TR-181 &amp; Telemetry Summary</title>
+<style>
+  :root {
+    --clr-critical: #d32f2f;
+    --clr-error:    #e65100;
+    --clr-warning:  #f9a825;
+    --clr-info:     #1565c0;
+    --clr-border:   #cfd8dc;
+    --clr-head-bg:  #45005ac4;
+    --clr-head-fg:  #ffffff;
+    --clr-stripe:   #f5f7fa;
+    --clr-bg:       #ffffff;
+    --clr-accent:   #0d47a1;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 15px; }
+  body {
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #263238;
+    background: var(--clr-bg);
+    line-height: 1.55;
+    padding: 36px 44px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 1.7rem; margin-bottom: 4px; color: var(--clr-accent); }
+  h2 { font-size: 1.25rem; margin-top: 36px; margin-bottom: 10px; color: var(--clr-accent); border-bottom: 2px solid var(--clr-accent); padding-bottom: 4px; }
+  h3 { font-size: 1.05rem; margin-top: 22px; margin-bottom: 8px; color:  #aa6f01; }
+  h4 { font-size: 0.95rem; margin-top: 16px; margin-bottom: 6px; color: #6d0800; }
+  .meta { font-size: 0.85rem; color: #546e7a; margin-bottom: 24px; }
+  .meta span { display: inline-block; margin-right: 24px; }
+  p { margin-bottom: 10px; }
+  .note { background: #e3f2fd; border-left: 4px solid var(--clr-info); padding: 8px 12px; font-size: 0.88rem; border-radius: 2px; margin-bottom: 12px; }
+  code { font-family: "Cascadia Code", "Fira Code", Consolas, monospace; font-size: 0.86em; background: #eceff1; padding: 1px 5px; border-radius: 3px; }
+  pre  { background: #eceff1; padding: 14px; border-radius: 4px; overflow-x: auto; font-size: 0.78rem; line-height: 1.45; margin-bottom: 16px; white-space: pre-wrap; word-wrap: break-word; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.86rem; }
+  th { background: var(--clr-head-bg); color: var(--clr-head-fg); text-align: left; padding: 7px 10px; font-weight: 700; border-bottom: 2px solid #67038f; }
+  td { padding: 6px 10px; border-bottom: 1px solid var(--clr-border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--clr-stripe); }
+
+  /* Badges */
+  .badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 3px; color: #fff; white-space: nowrap; }
+  .badge-critical { background: var(--clr-critical); }
+  .badge-error    { background: var(--clr-error); }
+  .badge-warning  { background: var(--clr-warning); color: #333; }
+  .badge-info     { background: var(--clr-info); }
+
+  /* Access badges: Red for Read/Write, Blue for Read-Only */
+  .badge-rw       { background: #d32f2f; }
+  .badge-ro       { background: #066927; }
+  .badge-table    { background: #e68619; }
+
+  /* Summary row totals */
+  .summary-total td { font-weight: 700; border-top: 2px solid var(--clr-head-bg); }
+
+  /* TOC */
+  .toc { background: #f5f7fa; border: 1px solid var(--clr-border); border-radius: 4px; padding: 16px 24px; margin-bottom: 28px; }
+  .toc h3 { margin-top: 0; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin-bottom: 4px; }
+  .toc a { color: var(--clr-accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* Print toolbar (screen only) */
+  .print-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; padding: 10px 14px; background: #f0f3f6; border: 1px solid var(--clr-border); border-radius: 5px; }
+  .print-toolbar label { font-size: 0.82rem; color: #37474f; font-weight: 600; }
+  .print-toolbar select { font-size: 0.82rem; padding: 4px 8px; border: 1px solid #b0bec5; border-radius: 4px; background: #fff; cursor: pointer; font-family: inherit; }
+  .print-btn { padding: 6px 16px; background: var(--clr-accent); color: #fff; border: none; border-radius: 4px; font-size: 0.82rem; cursor: pointer; font-family: inherit; font-weight: 600; }
+  .print-btn:hover { background: #1a5276; }
+
+  /* Print / PDF */
+  @media print {
+    html { font-size: 9pt; }
+    body { padding: 0; max-width: 100%; color: #000; background: #fff; }
+
+    /* Hide screen-only controls */
+    .print-toolbar { display: none; }
+
+    /* Headings — avoid orphans */
+    h1, h2, h3, h4 { page-break-after: avoid; orphans: 3; widows: 3; }
+    h2 { margin-top: 14pt; }
+
+    /* TOC on its own page; links become PDF hyperlinks in Chrome/Edge */
+    .toc { page-break-after: always; background: #f5f7fa !important; border: 1px solid #ccc !important;
+           -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .toc a { color: #0d47a1 !important; text-decoration: underline; }
+
+    /* Tables */
+    table { page-break-inside: auto; border-collapse: collapse; width: 100%; }
+    tr    { page-break-inside: avoid; }
+    thead { display: table-header-group; }
+    th { background: #45005a !important; color: #fff !important;
+         border-bottom: 2px solid #67038f !important;
+         -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    tr:nth-child(even) td { background: #f0f4f4 !important;
+         -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    /* Section headings — start each top-level section on a new page */
+    h2 { page-break-before: always; }
+    h2:first-of-type { page-break-before: avoid; }
+
+    /* Badges & notes */
+    .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact;
+             border: 1px solid rgba(0,0,0,0.25); }
+    .note  { background: #eef3f7 !important; border-left: 4px solid #5b7a94 !important;
+             -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    /* Code / pre */
+    code { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre  { background: #f5f5f5 !important; border: 1px solid #ccc !important; font-size: 7pt;
+           white-space: pre-wrap; page-break-inside: avoid;
+           -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    /* Summary total row */
+    .summary-total td { font-weight: 700; border-top: 2px solid #333; }
+
+    /* Page setup — A4 portrait for better readability */
+    @page { size: A4 portrait; margin: 15mm 12mm 15mm 12mm; }
+    @page :first { margin-top: 20mm; }
+  }
+</style>
+</head>
+<body>
+<h1>GPON Manager &mdash; TR-181 &amp; Telemetry Summary</h1>
+<div class="meta">
+  <span><strong>Version:</strong> 1.0</span>
+  <span><strong>Date:</strong> November 16, 2026</span>
+  <span><strong>Component:</strong> RDK GPON Manager (<code>rdkgponmanager</code>)</span>
+  <span><strong>Audience:</strong> Product &amp; Cloud teams</span>
+</div>
+<div class="print-toolbar">
+  <label for="print-size">Page Size:</label>
+  <select id="print-size">
+    <option value="A4" selected>A4</option>
+    <option value="A3">A3</option>
+    <option value="A2">A2</option>
+  </select>
+  <label for="print-orient">Orientation:</label>
+  <select id="print-orient">
+    <option value="portrait" selected>Portrait</option>
+    <option value="landscape">Landscape</option>
+  </select>
+  <button class="print-btn" onclick="doPrint()">&#128438; Print / Save as PDF</button>
+</div>
+<script>
+function doPrint() {
+  var size   = document.getElementById('print-size').value;
+  var orient = document.getElementById('print-orient').value;
+  var styleId = 'dynamic-page-style';
+  var el = document.getElementById(styleId);
+  if (!el) { el = document.createElement('style'); el.id = styleId; document.head.appendChild(el); }
+  el.textContent = '@page { size: ' + size + ' ' + orient + '; margin: 15mm 12mm 15mm 12mm; }';
+  window.print();
+}
+</script>
+
+<!-- ============================================================ -->
+<div class="toc">
+  <h3>Table of Contents</h3>
+  <ol>
+<li><a href="#sec-tr181">TR-181 Data Model Parameters</a><ol><li><a href="#sec-xpon"><code>Device.XPON</code> &mdash; Supported Parameters</a><ol><li><a href="#sec-xpon-onu">XPON Root, ONU &amp; EthernetUNI</a></li><li><a href="#sec-xpon-ani">ANI</a></li><li><a href="#sec-xpon-act">ANI.TC — ONU Activation</a></li><li><a href="#sec-xpon-pm">ANI.TC — Performance Monitoring (PHY / GEM / PLOAM / OMCI)</a></li><li><a href="#sec-xpon-gem">ANI.TC — GEM Ports</a></li><li><a href="#sec-xpon-thr">ANI.TC — Performance Thresholds</a></li><li><a href="#sec-xpon-alarm">ANI.TC — Alarms</a></li><li><a href="#sec-xpon-xcvr">ANI.Transceiver</a></li></ol></li><li><a href="#sec-ont"><code>Device.X_RDK_ONT</code> &mdash; RDK Extensions</a><ol><li><a href="#sec-ext-pm">PhysicalMedia — Module &amp; Interface</a></li><li><a href="#sec-ext-thr">PhysicalMedia — Optical Power Thresholds</a></li><li><a href="#sec-ext-gtc">GTC Counters</a></li><li><a href="#sec-ext-ploam">PLOAM</a></li><li><a href="#sec-ext-gem">GEM Port Ethernet Flow (VLAN Classification)</a></li><li><a href="#sec-ext-veip">VEIP Ethernet Flow (VLAN Classification)</a></li><li><a href="#sec-ext-tr69">TR-069 Management (OMCI)</a></li></ol></li></ol></li>
+<li><a href="#sec-telemetry">Telemetry Events (T2)</a><ol><li><a href="#sec-t-onu">ONU Activation (PLOAM) Events</a></li><li><a href="#sec-t-link">Interface Link Events</a></li><li><a href="#sec-t-alarm">PhysicalMedia Alarms (G.984.3 / G.987.3)</a></li><li><a href="#sec-t-sys">System Lifecycle Events</a></li><li><a href="#sec-t-err">Error Events</a></li><li><a href="#sec-t-onumap">ONU State &rarr; Event Mapping (XGS-PON)</a><ol><li><a href="#sec-t-xgs-states">XGS-PON States</a></li><li><a href="#sec-t-xgs-trans">XGS-PON Transitions &amp; Telemetry Values</a></li><li><a href="#sec-t-xgs-other">Other Reported Pairs</a></li><li><a href="#sec-t-xgs-seq">Common XGS-PON Sequences</a></li></ol></li><li><a href="#sec-t-fmt">Value Formats &amp; Duplicate Suppression</a></li><li><a href="#sec-t-prio">Priority Definitions</a></li><li><a href="#sec-t-summary">Summary Statistics</a></li></ol></li>
+  </ol>
+</div>
+
+<h2 id="sec-tr181">1. TR-181 Data Model Parameters</h2>
+
+<p>GPON Manager exposes the standard BBF <code>Device.XPON</code> data model (TR-181 2.21) and the RDK extension model <code>Device.X_RDK_ONT</code>. This summary lists every supported <code>Device.XPON</code> parameter and the <code>Device.X_RDK_ONT</code> parameters that have no <code>Device.XPON</code> equivalent.</p>
+
+<div class="note"><strong>Legend:</strong> <span class="badge badge-ro">Read-Only</span> <span class="badge badge-rw">Read/Write</span>. Data types, enumerations, ranges and string sizes follow BBF TR-181 2.21. Descriptions are the BBF text; text in <em>italics</em> describes GPON Manager behaviour.</div>
+
+<div class="note"><strong>Instances:</strong> one ONU and one ANI (<code>ONU.1</code>, <code>ANI.1</code>). <code>EthernetUNI.{i}</code> has one row per VEIP interface, <code>ANI.1.Transceiver.{i}</code> one row per optical module and <code>TC.GEM.Port.{i}</code> one row per GEM port.</div>
+
+<div class="note"><strong>Value difference from BBF:</strong> <code>TC.GEM.Port.{i}.Direction</code> reports <code>unidirectional</code> (not in the BBF enumeration) for a one-way GEM port.</div>
+
+<div class="note"><strong>Read-only differences from BBF:</strong> <code>ONU.{i}.Enable</code>, <code>ANI.{i}.Enable</code>, <code>ANI.{i}.Alias</code>, <code>EthernetUNI.{i}.Alias</code>, <code>EthernetUNI.{i}.Description</code> and <code>EthernetUNI.{i}.LowerLayers</code> are writable in BBF but read-only in GPON Manager.</div>
+
+<h3 id="sec-xpon">1.1 <code>Device.XPON</code> (BBF TR-181 2.21) &mdash; Supported Parameters</h3>
+
+<h4 id="sec-xpon-onu">1.1.1 XPON Root, ONU &amp; EthernetUNI</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.XPON.ONUNumberOfEntries</code></td><td>Number of entries in the <code>ONU</code> table. <em>Always 1.</em></td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>1</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.SoftwareImageNumberOfEntries</code></td><td>Number of entries in the <code>SoftwareImage</code> table. <em>Always 0 — no software-image rows are registered.</em></td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>0</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNINumberOfEntries</code></td><td>Number of entries in the <code>EthernetUNI</code> table. <em>Number of VEIP interfaces.</em></td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2. e.g. <code>1</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANINumberOfEntries</code></td><td>Number of entries in the <code>ANI</code> table. <em>Always 1.</em></td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>1</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.Enable</code></td><td>Enables or disables this ONU. <em>Read-only (BBF: Read/Write). <code>true</code> while GPON Manager is connected to the PON stack, otherwise <code>false</code>.</em></td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> | <code>false</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.Name</code></td><td>The textual name of the ONU as assigned by the CPE. <em>Always <code>ONU&lt;i&gt;</code>.</em></td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>ONU1</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Enable</code></td><td>Indicates whether this interface is enabled or not. <em><em>Unlock</em> → true, <em>Lock</em> → false.</em> <strong>Telemetry:</strong> Every change raises <code>XPON_INTF_ADMIN_LOCK</code> / <code>_UNLOCK</code> (§2.2).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Unlock) | <code>false</code> (Lock)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Status</code></td><td>The current operational state of the interface. <strong>Telemetry:</strong> <em>Up</em>/<em>Down</em> changes raise the <code>XPON_INTF_LINK_*</code> / <code>XPON_PHY_STATUS_*</code> events (§2.2).</td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>Up</code>, <code>Down</code>, <code>Unknown</code>, <code>Dormant</code>, <code>NotPresent</code>, <code>LowerLayerDown</code>, <code>Error</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Name</code></td><td>The textual name of the interface as assigned by the CPE. <strong>Telemetry:</strong> Carried as <code>Interface=&lt;name&gt;</code> in <code>XPON_INTF_LINK_*</code> (§2.2).</td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td>≤ 64 chars. e.g. <code>veip0</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.ANIs</code></td><td>References all associated ANI interfaces. <em>Always <code>Device.XPON.ONU.1.ANI.1</code>.</em></td><td><code>list&lt;string&gt;</code></td><td><span class="badge badge-ro">Read-Only</span></td><td><code>Device.XPON.ONU.1.ANI.1</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainID</code></td><td>String to identify the associated service in the ONU management domain to the TR-181 management domain. <em>Formatted as <code>(VEIP,&lt;MeId&gt;)</code>.</em></td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td>≤ 256 chars, formatted <code>(VEIP,&lt;MeId&gt;)</code>. e.g. <code>(VEIP,1025)</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.InterdomainName</code></td><td>String that provides an additional way to identify the associated service to the TR-181 management domain.</td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td>≤ 25 chars. e.g. <code>VEIP_1</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Alias</code></td><td>Unique, non-volatile alias for this instance. <em><code>cpe-</code> + upper-case VEIP interface name; <code>cpe-VEIP&lt;i&gt;</code> if the name is empty. Read-only (BBF: Read/Write).</em></td><td>_AliasCWMP</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>cpe-VEIP0</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Description</code></td><td>A user-friendly description of the interface. <em><code>GPON VEIP WAN interface &lt;Alias&gt;</code>. Read-only (BBF: Read/Write).</em></td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>GPON VEIP WAN interface cpe-VEIP0</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.LastChange</code></td><td>The accumulated time in seconds since the interface entered its current operational state. <em>Seconds since <code>Status</code> last changed, or since the row was created. Starts again from 0 when GPON Manager restarts.</em></td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>3600</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.LowerLayers</code></td><td>Comma-separated list of references to the interface objects stacked immediately below this one. <em>Always empty: BBF expects <code>LowerLayers</code> not to be used for EthernetUNI. Read-only (BBF: Read/Write).</em></td><td><code>list&lt;string&gt;</code></td><td><span class="badge badge-ro">Read-Only</span></td><td><code>""</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Upstream</code></td><td>Indicates whether the interface points towards the Internet (<code>true</code>) or towards End Devices (<code>false</code>). <em>Always <code>true</code>: the VEIP is the gateway WAN interface.</em></td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesSent</code></td><td>The total number of bytes transmitted out of the interface, including framing characters.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>123456789</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.BytesReceived</code></td><td>The total number of bytes received on the interface, including framing characters.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>987654321</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsSent</code></td><td>The total number of packets transmitted out of the interface.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>120000</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.PacketsReceived</code></td><td>The total number of packets received on the interface.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>450000</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsSent</code></td><td>The total number of outbound packets that could not be transmitted because of errors. <em>32-bit counter; wraps.</em></td><td>StatsCounter32</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>0</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.ErrorsReceived</code></td><td>The total number of inbound packets that contained errors preventing them from being delivered to a higher-layer protocol. <em>32-bit counter; wraps.</em></td><td>StatsCounter32</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>0</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsSent</code></td><td>The total number of outbound packets which were chosen to be discarded even though no errors had been detected to prevent their being transmitted. <em>32-bit counter; wraps.</em></td><td>StatsCounter32</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>0</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.DiscardPacketsReceived</code></td><td>The total number of inbound packets which were chosen to be discarded even though no errors had been detected to prevent their being delivered. <em>32-bit counter; wraps.</em></td><td>StatsCounter32</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>0</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Stats.MulticastPacketsReceived</code></td><td>The total number of received packets, delivered by this layer to a higher layer, which were addressed to a multicast address at this layer.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>1500</code></td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-xpon-ani">1.1.2 ANI</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Enable</code></td><td>Enables or disables the interface. If disabled, the device should force the ONU state of this ANI to O1 (Initial state). <em>Read-only (BBF: Read/Write) because writing false would switch the PON link off.</em></td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> | <code>false</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Status</code></td><td>The current operational state of the interface. <em>Taken from the active optical module.</em></td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>Up</code>, <code>Down</code>, <code>Unknown</code>, <code>Dormant</code>, <code>NotPresent</code>, <code>Error</code>, <code>NotAllowed</code>. <code>NotAllowed</code> is never reported; a HAL <code>LowerLayerDown</code> fails the get.</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Alias</code></td><td>Unique, non-volatile alias for this instance. <em>Read-only (BBF: writeOnceReadOnly).</em></td><td>_AliasCWMP</td><td><span class="badge badge-ro">Read-Only</span></td><td>≤ 64 chars. e.g. <code>cpe-ani-1</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.LastChange</code></td><td>The accumulated time in seconds since the interface entered its current operational state.</td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>Seconds, 0 – 2<sup>32</sup>−1. e.g. <code>3600</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TransceiverNumberOfEntries</code></td><td>Number of entries in the <code>Transceiver</code> table. <em>Number of optical modules.</em></td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2. e.g. <code>1</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Name</code></td><td>The textual name of the ANI entry as assigned by the CPE. <em>Always <code>ANI&lt;i&gt;</code>.</em></td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>ANI1</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.PONMode</code></td><td>PON mode, defines the detected or configured PON mode of the ANI. <em>Same mapping as <code>Transceiver.{i}.PONMode</code>, taken from the active optical module; <code>Unknown</code> if there is no single active module or the PON mode is not valid.</em></td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>Unknown</code> | <code>G-PON</code> | <code>XG-PON</code> | <code>NG-PON2</code> | <code>XGS-PON</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.SFPReferenceList</code></td><td>Small-form Factor Pluggable (SFP) entries associated with this interface. <em>Always empty: <code>Device.SFPs.SFPCage.{i}</code> is not implemented on this platform.</em></td><td><code>list&lt;string&gt;</code></td><td><span class="badge badge-ro">Read-Only</span></td><td><code>""</code></td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-xpon-act">1.1.3 ANI.TC — ONU Activation</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUState</code></td><td>ONU activation state. <em>O1–O9 (the BBF combined <em>O2-3</em> value is never reported).</em> <strong>Telemetry:</strong> Every change raises <code>XPON_ONU_STATE_CHANGE</code> (<code>From=O&lt;a&gt;,To=O&lt;b&gt;</code>). Milestone transitions (leaving O1, falling back to O1, entering O6/O7, leaving O7, entering/leaving O5) also raise the specific <code>XPON_ONU_*</code> events (§2.1, mapping in §2.6).</td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>O1</code>, <code>O2</code>, <code>O3</code>, <code>O2-3</code>, <code>O4</code>, <code>O5</code>, <code>O6</code>, <code>O7</code>, <code>O8</code>, <code>O9</code>. <code>O2-3</code> is never reported. e.g. <code>O5</code> (Operation)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.VendorID</code></td><td>Identifies the vendor of the ONU.</td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td>4 chars. e.g. <code>ALCL</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.SerialNumber</code></td><td>Represents the combination of the Vendor-ID and the Vendor-specific serial number (VSSN).</td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td>≤ 12 chars (VendorID + VSSN). e.g. <code>ALCLB1234567</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUID</code></td><td>Identifier that the OLT assigns to this ANI during the activation.</td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 1022 (G-PON uses 0 – 253). e.g. <code>1</code></td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-xpon-pm">1.1.4 ANI.TC — Performance Monitoring (PHY / GEM / PLOAM / OMCI)</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.CorrectedFECBytes</code></td><td>The number of bytes that were corrected by the FEC function.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>64</sup>−1 (cumulative). e.g. <code>1048576</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.CorrectedFECCodewords</code></td><td>Count of FEC codewords that contained errors but were corrected by the FEC function.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>64</sup>−1 (cumulative). e.g. <code>1048576</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.UncorrectableFECCodewords</code></td><td>Count of FEC codewords that contained errors and could not be corrected by the FEC function.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>64</sup>−1 (cumulative). e.g. <code>1048576</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.TotalFECCodewords</code></td><td>Count of total received FEC codewords.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>64</sup>−1 (cumulative). e.g. <code>1048576</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.PSBdHECErrorCount</code></td><td>HEC error in any of the fields of PSBd.</td><td>StatsCounter32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>32</sup>−1 (cumulative). e.g. <code>12</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PHY.HeaderHECErrorCount</code></td><td>HEC errors received in the DS XGTC or FS header. <em>Best-match mapping.</em></td><td>StatsCounter32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>32</sup>−1 (cumulative). e.g. <code>12</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FrameHeaderHECErrors</code></td><td>XGEM frame header HEC errors. Number of events involving loss of XGEM channel delineation. <em>Best-match mapping.</em></td><td>StatsCounter32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>32</sup>−1 (cumulative). e.g. <code>12</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesSent</code></td><td>Total number of (X)GEM frames transmitted. <em>Sum over all GEM ports.</em></td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>120000</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.GEM.FramesReceived</code></td><td>Total number of (X)GEM frames received. <em>Sum over all GEM ports.</em></td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>450000</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.MICErrors</code></td><td>PLOAM MIC errors. Counter of received PLOAM messages with MIC errors.</td><td>StatsCounter32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>32</sup>−1 (cumulative). e.g. <code>12</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.DownstreamMessageCount</code></td><td>Downstream PLOAM message count. Count of PLOAM messages sent by OLT, received by ONU, either broadcast or directed to the specific ONU-ID.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>64</sup>−1 (cumulative). e.g. <code>1048576</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.PLOAM.UpstreamMessageCount</code></td><td>Upstream PLOAM message count. Count of messages (other than Acknowledgement) sent by ONU to OLT.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>64</sup>−1 (cumulative). e.g. <code>1048576</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.BaselineMessagesReceived</code></td><td>OMCI baseline message count.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>64</sup>−1 (cumulative). e.g. <code>1048576</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.ExtendedMessagesReceived</code></td><td>OMCI extended message count.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>64</sup>−1 (cumulative). e.g. <code>1048576</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PM.OMCI.MICErrors</code></td><td>Count of received OMCI messages with MIC errors.</td><td>StatsCounter32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>32</sup>−1 (cumulative). e.g. <code>12</code></td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-xpon-gem">1.1.5 ANI.TC — GEM Ports</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.PortNumberOfEntries</code></td><td>Number of entries in the <code>Port</code> table. <em>Number of GEM ports.</em></td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 32. e.g. <code>4</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortID</code></td><td>Identifies a GEM port.</td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 65534 (G-PON uses 0 – 4095). e.g. <code>1024</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction</code></td><td>Type of connection this GEM port is used for. <em><code>bidirectional</code> for a Bidirectional port, <code>unidirectional</code> for a Unidirectional port. <code>unidirectional</code> is not a BBF value; the PON stack does not report the direction.</em></td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>bidirectional</code> | <code>unidirectional</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortType</code></td><td>GEM port type. <em><code>unicast</code> for a Bidirectional port, <code>multicast</code> for a Unidirectional (downstream-only) port; <code>broadcast</code> is never reported.</em></td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>unicast</code> | <code>multicast</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesSent</code></td><td>(X)GEM frames transmitted by this (X)GEM port.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>64</sup>−1 (cumulative). e.g. <code>1048576</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesReceived</code></td><td>(X)GEM frames received by this (X)GEM port.</td><td>StatsCounter64</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>64</sup>−1 (cumulative). e.g. <code>1048576</code></td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-xpon-thr">1.1.6 ANI.TC — Performance Thresholds</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PerformanceThresholds.SignalFail</code></td><td>Signal fail (SF) threshold. This parameter specifies the downstream bit error rate (BER) threshold to detect the SF alarm.</td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>3 – 8 (BER 10<sup>−x</sup>). e.g. <code>5</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.PerformanceThresholds.SignalDegrade</code></td><td>Signal degrade (SD) threshold. This parameter specifies the downstream BER threshold to detect the SD alarm.</td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>4 – 10 (BER 10<sup>−x</sup>), must be &gt; SignalFail. e.g. <code>9</code></td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-xpon-alarm">1.1.7 ANI.TC — Alarms</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LOS</code></td><td>Loss of signal. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_LOS</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LOF</code></td><td>Loss of frame. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_LOF</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SF</code></td><td>Signal failed. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_SF</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SD</code></td><td>Signal degraded. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_SD</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.LCDG</code></td><td>Loss of GEM channel delineation. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_LCDG</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.TF</code></td><td>Transmitter failure. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_TF</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.SUF</code></td><td>Start-up failure. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_SUF</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.MEM</code></td><td>Message error message. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_MEM</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.DACT</code></td><td>Deactivate ONU-ID. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_DACT</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.DIS</code></td><td>Disabled ONU. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_DIS</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.MIS</code></td><td>Link mismatching. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_MIS</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.PEE</code></td><td>When the ONU receives a PEE message. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_PEE</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.RDI</code></td><td>Remote defect indication. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_RDI</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.ROGUE</code></td><td>The ANI behaves rogue: it is not transmitting in a manner consistent with parameters specified in the ITU-T PON standards. <em><em>Active</em> = <code>true</code>.</em> <strong>Telemetry:</strong> Raise/clear sends <code>XPON_ALARM_ROGUE</code> (§2.3).</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> (Active) | <code>false</code> (Inactive)</td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-xpon-xcvr">1.1.8 ANI.Transceiver</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.ID</code></td><td>The ID as assigned by the CPE to this Transceiver entry.</td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 1. e.g. <code>0</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Identifier</code></td><td>Transceiver type as an SFF-8024 Table 4-1 identifier. <em><code>3</code> (SFP/SFP+/SFP28) when the module cage is SFP; not available for bond-on-board (BoB) optics.</em></td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>3</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorName</code></td><td>Vendor name.</td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td>≤ 256 chars. e.g. <code>ACME Optics</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorPartNumber</code></td><td>Vendor part number.</td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td>≤ 256 chars. e.g. <code>XGSPON-SFP-20</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.VendorRevision</code></td><td>Vendor revision.</td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td>≤ 256 chars. e.g. <code>A1</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.PONMode</code></td><td>PON mode, reports the PON mode of the transceiver. <em>Mapped to <em>G-PON</em>, <em>XG-PON</em>, <em>NG-PON2</em>, <em>XGS-PON</em>.</em> <strong>Telemetry:</strong> An EPON module raises <code>XPON_SYSTEM_HAL_WRONG_PON_MODE</code> (§2.4). <em><code>Unknown</code> when the PON mode is not valid.</em></td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>Unknown</code>, <code>G-PON</code>, <code>XG-PON</code>, <code>NG-PON2</code>, <code>XGS-PON</code>. <code>Unknown</code> when the HAL reports <code>PonModeValid</code> = false. e.g. <code>XGS-PON</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Connector</code></td><td>Connector type.</td><td>string</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>Unknown</code>, <code>LC</code>, <code>SC</code>, <code>ST</code>, <code>FC</code>, <code>MT-RJ</code>. e.g. <code>SC</code></td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.NominalBitRateDownstream</code></td><td>Nominal data rate downstream in kbps.</td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>kbps. e.g. <code>2488320</code> (G-PON), <code>9953280</code> (XGS-PON)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.NominalBitRateUpstream</code></td><td>Nominal data rate upstream in kbps.</td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>kbps. e.g. <code>1244160</code> (G-PON), <code>9953280</code> (XGS-PON)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.RxPower</code></td><td>Measured RX power in 0.1 dBm.</td><td>int</td><td><span class="badge badge-ro">Read-Only</span></td><td>0.1 dBm. Typical −280 – −80. e.g. <code>-185</code> (−18.5 dBm)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.TxPower</code></td><td>Measured TX power in 0.1 dBm.</td><td>int</td><td><span class="badge badge-ro">Read-Only</span></td><td>0.1 dBm. Typical 5 – 90. e.g. <code>25</code> (2.5 dBm)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Voltage</code></td><td>Measured supply voltage in mV.</td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>mV, ≥ 0. e.g. <code>3300</code> (3.3 V)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Bias</code></td><td>Measured bias current in µA.</td><td>unsignedInt</td><td><span class="badge badge-ro">Read-Only</span></td><td>µA. e.g. <code>12000</code> (12 mA)</td></tr>
+    <tr><td><code>Device.XPON.ONU.{i}.ANI.{i}.Transceiver.{i}.Temperature</code></td><td>Measured temperature in °C.</td><td>int</td><td><span class="badge badge-ro">Read-Only</span></td><td>°C, ≥ −274. e.g. <code>45</code></td></tr>
+  </tbody>
+</table>
+
+<h3 id="sec-ont">1.2 <code>Device.X_RDK_ONT</code> &mdash; RDK Extensions</h3>
+
+<p>RDK-specific parameters with no <code>Device.XPON</code> equivalent.</p>
+
+<h4 id="sec-ext-pm">1.2.1 PhysicalMedia — Module &amp; Interface</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.X_RDK_ONT.PhysicalMedia.{i}.Cage</code></td><td>Physical cage of the optical module: <em>BoB</em> (bond-on-board) or <em>SFP</em>.</td><td>string (enum)</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>BoB</code> | <code>SFP</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.PhysicalMedia.{i}.ModuleFirmwareVersion</code></td><td>Optical module firmware version.</td><td>string(256)</td><td><span class="badge badge-ro">Read-Only</span></td><td>≤ 255 chars. e.g. <code>1.0.3</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.PhysicalMedia.{i}.RedundancyState</code></td><td>Redundancy role of this media: <em>Active</em> or <em>Standby</em>.</td><td>string (enum)</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>Active</code> | <code>Standby</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.PhysicalMedia.{i}.LowerLayers</code></td><td>Comma-separated list of lower-layer paths.</td><td>string(1024)</td><td><span class="badge badge-rw">Read/Write</span></td><td>≤ 1023 chars. e.g. <code>Device.Optical.Interface.1</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.PhysicalMedia.{i}.Upstream</code></td><td>Whether this interface is upstream-facing.</td><td>boolean</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>true</code> | <code>false</code>. e.g. <code>true</code></td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-ext-thr">1.2.2 PhysicalMedia — Optical Power Thresholds</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.X_RDK_ONT.PhysicalMedia.{i}.RxPower.SignalLevelLowerThreshold</code></td><td>Lower RX optical power threshold.</td><td>int32</td><td><span class="badge badge-rw">Read/Write</span></td><td>0.1 dBm. e.g. <code>-280</code> (−28 dBm)</td></tr>
+    <tr><td><code>Device.X_RDK_ONT.PhysicalMedia.{i}.RxPower.SignalLevelUpperThreshold</code></td><td>Upper RX optical power threshold.</td><td>int32</td><td><span class="badge badge-rw">Read/Write</span></td><td>0.1 dBm. e.g. <code>-80</code> (−8 dBm)</td></tr>
+    <tr><td><code>Device.X_RDK_ONT.PhysicalMedia.{i}.TxPower.SignalLevelLowerThreshold</code></td><td>Lower TX optical power threshold.</td><td>int32</td><td><span class="badge badge-rw">Read/Write</span></td><td>0.1 dBm. e.g. <code>5</code> (0.5 dBm)</td></tr>
+    <tr><td><code>Device.X_RDK_ONT.PhysicalMedia.{i}.TxPower.SignalLevelUpperThreshold</code></td><td>Upper TX optical power threshold.</td><td>int32</td><td><span class="badge badge-rw">Read/Write</span></td><td>0.1 dBm. e.g. <code>90</code> (9 dBm)</td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-ext-gtc">1.2.3 GTC Counters</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.X_RDK_ONT.Gtc.FramesLost</code></td><td>Downstream frames lost.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>32</sup>−1 (cumulative). e.g. <code>12</code></td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-ext-ploam">1.2.4 PLOAM</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.X_RDK_ONT.Ploam.ActivationCounter</code></td><td>Number of times the ONU has reached the operational state.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 2<sup>32</sup>−1. e.g. <code>3</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Ploam.RegistrationTimers.TO1</code></td><td>TO1 (serial-number / ranging) timer value.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>ms. e.g. <code>10000</code> (10&nbsp;s)</td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Ploam.RegistrationTimers.TO2</code></td><td>TO2 (downstream-loss recovery: GPON POPUP / XGS-PON intermittent LODS) timer value.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>ms. e.g. <code>100</code> (100&nbsp;ms)</td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-ext-gem">1.2.5 GEM Port Ethernet Flow (VLAN Classification)</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Ingress.Tagged</code></td><td>Ingress tagging mode of the flow.</td><td>string (enum)</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>Single</code> | <code>Double</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Ingress.S-VLAN.Vid</code></td><td>Ingress S-VLAN VLAN ID.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 4095 (1 – 4094 usable). e.g. <code>100</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Ingress.S-VLAN.Pcp</code></td><td>Ingress S-VLAN priority code point.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 7. e.g. <code>0</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Ingress.S-VLAN.Dei</code></td><td>Ingress S-VLAN drop eligible indicator.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 | 1. e.g. <code>0</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Ingress.C-VLAN.Vid</code></td><td>Ingress C-VLAN VLAN ID.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 4095 (1 – 4094 usable). e.g. <code>100</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Ingress.C-VLAN.Pcp</code></td><td>Ingress C-VLAN priority code point.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 7. e.g. <code>0</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Ingress.C-VLAN.Dei</code></td><td>Ingress C-VLAN drop eligible indicator.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 | 1. e.g. <code>0</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Egress.Tagged</code></td><td>Egress tagging mode of the flow.</td><td>string (enum)</td><td><span class="badge badge-ro">Read-Only</span></td><td><code>Single</code> | <code>Double</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Egress.S-VLAN.Vid</code></td><td>Egress S-VLAN VLAN ID.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 4095 (1 – 4094 usable). e.g. <code>100</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Egress.S-VLAN.Pcp</code></td><td>Egress S-VLAN priority code point.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 7. e.g. <code>0</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Egress.S-VLAN.Dei</code></td><td>Egress S-VLAN drop eligible indicator.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 | 1. e.g. <code>0</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Egress.C-VLAN.Vid</code></td><td>Egress C-VLAN VLAN ID.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 4095 (1 – 4094 usable). e.g. <code>100</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Egress.C-VLAN.Pcp</code></td><td>Egress C-VLAN priority code point.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 7. e.g. <code>0</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Gem.{i}.EthernetFlow.Egress.C-VLAN.Dei</code></td><td>Egress C-VLAN drop eligible indicator.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 | 1. e.g. <code>0</code></td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-ext-veip">1.2.6 VEIP Ethernet Flow (VLAN Classification)</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.X_RDK_ONT.Veip.{i}.EthernetFlow.Ingress.Tagged</code></td><td>Ingress tagging mode of the flow.</td><td>string (enum)</td><td><span class="badge badge-rw">Read/Write</span></td><td><code>Untagged</code> | <code>Single</code> | <code>Double</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Veip.{i}.EthernetFlow.Ingress.Q-VLAN.Vid</code></td><td>Ingress Q-VLAN VLAN ID.</td><td>uint32</td><td><span class="badge badge-rw">Read/Write</span></td><td>0 – 4095 (1 – 4094 usable). e.g. <code>100</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Veip.{i}.EthernetFlow.Ingress.Q-VLAN.Pcp</code></td><td>Ingress Q-VLAN priority code point.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 7. e.g. <code>0</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Veip.{i}.EthernetFlow.Ingress.Q-VLAN.Dei</code></td><td>Ingress Q-VLAN drop eligible indicator.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 | 1. e.g. <code>0</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Veip.{i}.EthernetFlow.Egress.Tagged</code></td><td>Egress tagging mode of the flow.</td><td>string (enum)</td><td><span class="badge badge-rw">Read/Write</span></td><td><code>Untagged</code> | <code>Single</code> | <code>Double</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Veip.{i}.EthernetFlow.Egress.Q-VLAN.Vid</code></td><td>Egress Q-VLAN VLAN ID.</td><td>uint32</td><td><span class="badge badge-rw">Read/Write</span></td><td>0 – 4095 (1 – 4094 usable). e.g. <code>100</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Veip.{i}.EthernetFlow.Egress.Q-VLAN.Pcp</code></td><td>Egress Q-VLAN priority code point.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 7. e.g. <code>0</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.Veip.{i}.EthernetFlow.Egress.Q-VLAN.Dei</code></td><td>Egress Q-VLAN drop eligible indicator.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 | 1. e.g. <code>0</code></td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-ext-tr69">1.2.7 TR-069 Management (OMCI)</h4>
+
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th><th>Data Type</th><th>Access</th><th>Example / Values</th></tr></thead>
+  <tbody>
+    <tr><td><code>Device.X_RDK_ONT.TR69.url</code></td><td>ACS URL provisioned through OMCI (TR-069 management ME).</td><td>string(256)</td><td><span class="badge badge-ro">Read-Only</span></td><td>≤ 255 chars. e.g. <code>http://acs.example.com:7547/</code></td></tr>
+    <tr><td><code>Device.X_RDK_ONT.TR69.AssociatedTag</code></td><td>VLAN tag associated with the TR-069 management path.</td><td>uint32</td><td><span class="badge badge-ro">Read-Only</span></td><td>0 – 65535 (802.1Q TCI: PCP/DEI/VID). e.g. <code>100</code></td></tr>
+  </tbody>
+</table>
+
+<h2 id="sec-telemetry">2. Telemetry Events (T2)</h2>
+
+<p>Events are sent through the RDK Telemetry 2.0 (T2) framework by component <code>GponManager</code>. Every marker starts with <code>XPON_</code>. Events with a value are sent as a string event (<code>t2_event_s</code>); events without a value as a count of 1 (<code>t2_event_d</code>).</p>
+
+<div class="note"><strong>Event-driven:</strong> events are raised only when the PON stack reports a change (ONU state, alarm, VEIP state), on a link transition, or on a lifecycle / error condition. Reading TR-181 parameters never raises telemetry, except the poll-failure events <code>XPON_ERROR_STATS_COLLECTION_FAILED</code> and <code>XPON_SYSTEM_HAL_WRONG_PON_MODE</code>.</div>
+
+<h3 id="sec-t-onu">2.1 ONU Activation (PLOAM) Events</h3>
+
+<p>Raised when the ONU activation state (<code>Device.XPON.ONU.{i}.ANI.{i}.TC.ONUActivation.ONUState</code>) changes. Every change sends <code>XPON_ONU_STATE_CHANGE</code>; some changes also send a milestone event (see &sect;2.6).</p>
+
+<table>
+<thead><tr><th>Event Name</th><th>Meaning</th><th>Priority</th><th>Value</th><th>Estimated Frequency</th></tr></thead>
+<tbody>
+<tr><td><code>XPON_ONU_LOS</code></td><td>Downstream signal lost: the ONU entered <em>O6</em> (Intermittent LODS), or fell back to <em>O1</em> (Initial) from <em>O2</em>–<em>O5</em>.</td><td><span class="badge badge-critical">Critical</span></td><td>—</td><td>On fibre cut, OLT/splitter failure or optical power loss. Rare in stable networks (0–2/day); bursts during outages.</td></tr>
+<tr><td><code>XPON_ONU_DOWNSTREAM_SIGNAL_DETECTED</code></td><td>Downstream signal acquired: transition out of <em>O1</em> into any state other than O1.</td><td><span class="badge badge-info">Info</span></td><td>—</td><td>Startup and after each LOS recovery. 1–2 per boot.</td></tr>
+<tr><td><code>XPON_ONU_REGISTRATION</code></td><td>ONU reached <em>O5</em> (Operation) — ranging done, ONU-ID assigned, ONU in service.</td><td><span class="badge badge-info">Info</span></td><td>—</td><td>Once per boot; repeats after each recovery (1–3/day).</td></tr>
+<tr><td><code>XPON_ONU_DEREGISTRATION</code></td><td>ONU left <em>O5</em> (Operation) for any other state.</td><td><span class="badge badge-warning">Warning</span></td><td>—</td><td>OLT deactivation, LOS, or ranging loss. 0–1/day normally.</td></tr>
+<tr><td><code>XPON_ONU_EMERGENCY_STOP</code></td><td>ONU entered <em>O7</em> (Emergency Stop) — OLT ordered the transmitter off (Disable_Serial_Number PLOAM).</td><td><span class="badge badge-critical">Critical</span></td><td>—</td><td>Only on OLT action against this ONU (rogue / operator disable). Very rare.</td></tr>
+<tr><td><code>XPON_ONU_EMERGENCY_STOP_CLEARED</code></td><td>ONU left <em>O7</em> (Emergency Stop) — the OLT re-enabled the transmitter (Disable_Serial_Number with <em>enable</em>).</td><td><span class="badge badge-info">Info</span></td><td>—</td><td>Paired with each EMERGENCY_STOP. Very rare.</td></tr>
+<tr><td><code>XPON_ONU_STATE_CHANGE</code></td><td>Every ONU activation state change, including the ones the milestone events above don't cover (moves among <em>O2</em>/<em>O3</em>/<em>O4</em>, <em>O8</em>/<em>O9</em> tuning, returns from <em>O6</em>–<em>O9</em> to <em>O1</em>). Always sent first for a transition. The <code>From</code>/<code>To</code> pair identifies the transition (ranging failure, TO1/TO2 expiry, POPUP / LODS recovery, OLT disable), so no per-transition markers are defined; see <a href="#sec-t-xgs-trans">&sect;2.6.2</a> for the meaning and possible reasons of each pair.</td><td><span class="badge badge-info">Info</span></td><td><code>From=O&lt;a&gt;,To=O&lt;b&gt;</code></td><td>Every PLOAM state change. About 4–5 per activation (O1→O2→O3→O4→O5), more while ranging is unstable.</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-t-link">2.2 Interface Link Events</h3>
+
+<p><code>XPON_INTF_LINK_*</code> / <code>XPON_PHY_STATUS_*</code> are raised when a VEIP WAN link (<code>Device.XPON.ONU.{i}.EthernetUNI.{i}</code>) goes <em>Down&rarr;Up</em> or <em>Up&rarr;Down</em>. <code>XPON_INTF_ADMIN_*</code> are raised when the VEIP administrative state (<code>Device.XPON.ONU.{i}.EthernetUNI.{i}.Enable</code>) changes.</p>
+
+<table>
+<thead><tr><th>Event Name</th><th>Meaning</th><th>Priority</th><th>Value</th><th>Estimated Frequency</th></tr></thead>
+<tbody>
+<tr><td><code>XPON_INTF_LINK_UP</code></td><td>VEIP interface is up and has been reported to WAN Manager.</td><td><span class="badge badge-info">Info</span></td><td><code>Interface=&lt;ifname&gt;</code></td><td>Once per link-up. Typically 1/boot plus 1 per recovery.</td></tr>
+<tr><td><code>XPON_INTF_LINK_DOWN</code></td><td>VEIP interface went down and WAN Manager was told.</td><td><span class="badge badge-warning">Warning</span></td><td><code>Interface=&lt;ifname&gt;</code></td><td>Once per link-down. 0–2/day normally.</td></tr>
+<tr><td><code>XPON_PHY_STATUS_UP</code></td><td>Aggregate PHY state went up: the first VEIP link of the ONU came up (0→1 links up).</td><td><span class="badge badge-info">Info</span></td><td>—</td><td>Once per boot plus 1 per full recovery.</td></tr>
+<tr><td><code>XPON_PHY_STATUS_DOWN</code></td><td>Aggregate PHY state went down: the last VEIP link went down (1→0 links up). The ONU has no WAN connectivity.</td><td><span class="badge badge-critical">Critical</span></td><td>—</td><td>Only on full loss of WAN connectivity. 0–2/day.</td></tr>
+<tr><td><code>XPON_INTF_ADMIN_UNLOCK</code></td><td>The OLT unlocked the VEIP over OMCI (AdministrativeState <em>Lock→Unlock</em>). An Unlock also starts the VEIP link state machine. The default is <em>Lock</em>, so the first Unlock after start raises this event.</td><td><span class="badge badge-info">Info</span></td><td><code>Interface=&lt;ifname&gt;,Veip=&lt;n&gt;</code></td><td>Once per boot per VEIP after OMCI provisioning, plus 1 per re-provisioning.</td></tr>
+<tr><td><code>XPON_INTF_ADMIN_LOCK</code></td><td>The OLT locked the VEIP over OMCI (AdministrativeState <em>Unlock→Lock</em>): the UNI is administratively disabled and won't pass traffic.</td><td><span class="badge badge-warning">Warning</span></td><td><code>Interface=&lt;ifname&gt;,Veip=&lt;n&gt;</code></td><td>Only on OLT/operator action. Rare.</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-t-alarm">2.3 PhysicalMedia Alarms (G.984.3 / G.987.3)</h3>
+
+<p>Raised when a PON alarm (<code>Device.XPON.ONU.{i}.ANI.{i}.TC.Alarms.*</code>) changes. <em>Inactive&rarr;Active</em> sends <code>RAISED</code>; <em>Active&rarr;Inactive</em> sends <code>CLEARED</code>. Each alarm has its own marker.</p>
+
+<table>
+<thead><tr><th>Event Name</th><th>Meaning</th><th>Priority</th><th>Value</th><th>Estimated Frequency</th></tr></thead>
+<tbody>
+<tr><td><code>XPON_ALARM_LOS</code></td><td>Loss Of Signal — no downstream optical signal.</td><td><span class="badge badge-critical">Critical</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>On fibre/optical fault. 0–2/day.</td></tr>
+<tr><td><code>XPON_ALARM_LOF</code></td><td>Loss Of Frame — downstream frame delineation lost.</td><td><span class="badge badge-critical">Critical</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>Severe line impairment. Rare.</td></tr>
+<tr><td><code>XPON_ALARM_SF</code></td><td>Signal Fail — downstream BER above the SF threshold.</td><td><span class="badge badge-error">Error</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>Marginal optical budget. Rare.</td></tr>
+<tr><td><code>XPON_ALARM_SD</code></td><td>Signal Degrade — downstream BER above the SD threshold.</td><td><span class="badge badge-warning">Warning</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>Early warning of degradation. 0–5/day on marginal links.</td></tr>
+<tr><td><code>XPON_ALARM_LCDG</code></td><td>Loss of GEM Channel Delineation.</td><td><span class="badge badge-error">Error</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>Line impairment. Rare.</td></tr>
+<tr><td><code>XPON_ALARM_TF</code></td><td>Transmitter Failure — ONU laser fault.</td><td><span class="badge badge-critical">Critical</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>Hardware fault. Very rare.</td></tr>
+<tr><td><code>XPON_ALARM_SUF</code></td><td>Start-Up Failure — ranging/activation failed.</td><td><span class="badge badge-error">Error</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>Provisioning or ranging problem. Rare.</td></tr>
+<tr><td><code>XPON_ALARM_MEM</code></td><td>Message Error Message — unknown PLOAM message.</td><td><span class="badge badge-warning">Warning</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>OLT/ONU interoperability issue. Rare.</td></tr>
+<tr><td><code>XPON_ALARM_DACT</code></td><td>Deactivate ONU-ID received from the OLT.</td><td><span class="badge badge-error">Error</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>OLT-initiated deactivation. Rare.</td></tr>
+<tr><td><code>XPON_ALARM_DIS</code></td><td>Disabled ONU — OLT disabled this serial number.</td><td><span class="badge badge-critical">Critical</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>Operator action / rogue isolation. Very rare.</td></tr>
+<tr><td><code>XPON_ALARM_MIS</code></td><td>Link Mismatch.</td><td><span class="badge badge-error">Error</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>Wrong ODN / wavelength. Rare.</td></tr>
+<tr><td><code>XPON_ALARM_PEE</code></td><td>Physical Equipment Error reported by the OLT.</td><td><span class="badge badge-error">Error</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>Hardware fault. Rare.</td></tr>
+<tr><td><code>XPON_ALARM_RDI</code></td><td>Remote Defect Indication — the OLT sees a defective upstream signal.</td><td><span class="badge badge-warning">Warning</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>Upstream impairment. 0–2/day on marginal links.</td></tr>
+<tr><td><code>XPON_ALARM_ROGUE</code></td><td>Rogue ONU — transmitting outside the allocated window.</td><td><span class="badge badge-critical">Critical</span></td><td><code>RAISED|CLEARED,PM=&lt;n&gt;</code></td><td>ONU laser/timing fault. Very rare.</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-t-sys">2.4 System Lifecycle Events</h3>
+
+<p>GPON Manager start-up, shutdown and PON-mode checks.</p>
+
+<table>
+<thead><tr><th>Event Name</th><th>Meaning</th><th>Priority</th><th>Value</th><th>Estimated Frequency</th></tr></thead>
+<tbody>
+<tr><td><code>XPON_SYSTEM_INIT_SUCCESS</code></td><td>GPON Manager initialisation completed: data model, PON-stack (HAL) connection, initial data and the internal controller are up. Also sent when the optional <code>Device.XPON</code> RBUS provider fails, because <code>Device.X_RDK_ONT</code> still works; that failure is reported separately as <code>XPON_ERROR_RBUS_REGISTER_FAILED</code>.</td><td><span class="badge badge-info">Info</span></td><td>—</td><td>Once per process start.</td></tr>
+<tr><td><code>XPON_SYSTEM_INIT_FAILURE</code></td><td>Initialisation failed (data model, PON-stack (HAL) connection or component registration). The process may exit.</td><td><span class="badge badge-critical">Critical</span></td><td>—</td><td>Only on startup failure.</td></tr>
+<tr><td><code>XPON_SYSTEM_SHUTDOWN</code></td><td>Graceful shutdown requested through the interactive <code>q</code> command loop.</td><td><span class="badge badge-info">Info</span></td><td>—</td><td>Only on graceful (non-daemon) shutdown.</td></tr>
+<tr><td><code>XPON_SYSTEM_HAL_WRONG_PON_MODE</code></td><td>Optical module reports an EPON <code>PonMode</code> that GPON Manager can't serve. <code>PonMode</code> has no HAL event, so this is a poll failure (the polled value is rejected). Latched: sent once until a valid ITU PON mode is reported.</td><td><span class="badge badge-critical">Critical</span></td><td>—</td><td>Only on mis-provisioned hardware/HAL.</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-t-err">2.5 Error Events</h3>
+
+<p>Operational failures. A persistent failure sends one event per failure streak.</p>
+
+<table>
+<thead><tr><th>Event Name</th><th>Meaning</th><th>Priority</th><th>Value</th><th>Estimated Frequency</th></tr></thead>
+<tbody>
+<tr><td><code>XPON_ERROR_HAL_CALL_FAILED</code></td><td>HAL client init/connect failed, a HAL <code>setParam</code> request couldn't be sent, or the HAL returned failure.</td><td><span class="badge badge-error">Error</span></td><td>—</td><td>On HAL/daemon unavailability or rejected set.</td></tr>
+<tr><td><code>XPON_ERROR_HAL_EVENT_SUBSCRIBE_FAILED</code></td><td>Subscribing to HAL push events failed.</td><td><span class="badge badge-error">Error</span></td><td>—</td><td>Startup only.</td></tr>
+<tr><td><code>XPON_ERROR_HAL_EVENT_PARSE_FAILED</code></td><td>A HAL push event couldn't be parsed or mapped into the data model.</td><td><span class="badge badge-warning">Warning</span></td><td>—</td><td>Per malformed HAL event.</td></tr>
+<tr><td><code>XPON_ERROR_STATS_COLLECTION_FAILED</code></td><td>Poll failure: periodic HAL data read failed. Latched; re-armed by the next success.</td><td><span class="badge badge-warning">Warning</span></td><td>—</td><td>Once per failure streak.</td></tr>
+<tr><td><code>XPON_ERROR_RBUS_PUBLISH_FAILED</code></td><td>Telling WAN Manager about a VEIP PHY status change failed. Latched per state machine; re-armed by the next success.</td><td><span class="badge badge-error">Error</span></td><td>—</td><td>Once per failure streak.</td></tr>
+<tr><td><code>XPON_ERROR_RBUS_REGISTER_FAILED</code></td><td>Registering the <code>Device.XPON</code> RBUS provider failed. Non-fatal: <code>Device.X_RDK_ONT</code> stays available.</td><td><span class="badge badge-error">Error</span></td><td>—</td><td>Startup only.</td></tr>
+<tr><td><code>XPON_ERROR_STATE_MACHINE_START_FAILED</code></td><td>The VEIP link state machine couldn't be started (allocation or thread creation failed).</td><td><span class="badge badge-critical">Critical</span></td><td>—</td><td>Only under resource exhaustion.</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-t-onumap">2.6 ONU State &rarr; Event Mapping (XGS-PON)</h3>
+
+<p>XGS-PON (ITU-T G.9807.1, 10G symmetric) uses the activation state machine of G.989.3 without the wavelength-tuning states O8/O9. Serial-number acquisition is a single state, <em>O2-3</em>.</p>
+
+<p><code>XPON_ONU_STATE_CHANGE</code> carries the previous and new state as <code>From=O&lt;a&gt;,To=O&lt;b&gt;</code>, so every transition is identified by that value alone. Milestone events (<code>XPON_ONU_*</code>) follow it for the key transitions and are meant for simple dashboards.</p>
+
+<div class="note"><strong>Order of events:</strong> <code>XPON_ONU_STATE_CHANGE</code> is always sent first, then the matching milestones in this order: EMERGENCY_STOP_CLEARED (leaving O7), DOWNSTREAM_SIGNAL_DETECTED (leaving O1), LOS (entering O6, or O2&ndash;O5 &rarr; O1), DEREGISTRATION (leaving O5), REGISTRATION (entering O5), EMERGENCY_STOP (entering O7). No change, no event.</div>
+
+<div class="note"><strong>O2-3 reporting:</strong> TR-181 reports the XGS-PON state <em>O2-3</em> as <code>O2</code> or <code>O3</code>, depending on the PON stack. Both mean the same state and give the same milestones. In the telemetry value it therefore appears as <code>O2</code> or <code>O3</code>.</div>
+
+<h4 id="sec-t-xgs-states">2.6.1 XGS-PON (G.9807.1) States</h4>
+
+<table>
+<thead><tr><th>State</th><th>Reported as</th><th>Name</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr><td><em>O1</em></td><td><code>O1</code></td><td>Initial (O1.1 Off-sync, O1.2 Profile learning)</td><td>O1.1: no downstream sync. O1.2: synchronised, learning the burst profiles from Burst_Profile PLOAMs.</td></tr>
+<tr><td><em>O2-3</em></td><td>O2 or O3</td><td>Serial Number</td><td>Burst profile known. Answers serial-number grants (Serial_Number_ONU PLOAM with registration ID) and waits for Assign_ONU-ID. No timer.</td></tr>
+<tr><td><em>O4</em></td><td><code>O4</code></td><td>Ranging</td><td>ONU-ID assigned. Answers ranging grants and waits for Ranging_Time. TO1 is running.</td></tr>
+<tr><td><em>O5</em></td><td><code>O5</code></td><td>Operation</td><td>In service: ONU-ID and equalisation delay set; data, PLOAM and OMCI flow.</td></tr>
+<tr><td><em>O6</em></td><td><code>O6</code></td><td>Intermittent LODS</td><td>Loss of downstream sync in O5. Transmitter off, ONU-ID and equalisation delay kept; TO2 is running.</td></tr>
+<tr><td><em>O7</em></td><td><code>O7</code></td><td>Emergency Stop</td><td>Disable_Serial_Number (disable) received. Transmitter off until the OLT re-enables the serial number.</td></tr>
+</tbody>
+</table>
+
+<h4 id="sec-t-xgs-trans">2.6.2 XGS-PON (G.9807.1) Transitions &amp; Telemetry Values</h4>
+
+<p><em>XPON_ONU_STATE_CHANGE value</em> is the exact T2 value sent for the transition. <em>Milestone events</em> are sent after it, in the order shown.</p>
+
+<table>
+  <thead><tr><th>Transition</th><th>XPON_ONU_STATE_CHANGE value</th><th>Meaning</th><th>Possible reasons</th><th>Milestone events</th></tr></thead>
+  <tbody>
+    <tr><td>O1 → O2-3</td><td><code>From=O1,To=O2</code><br><code>From=O1,To=O3</code></td><td>Downstream sync achieved and burst profile learned (O1.1 → O1.2 → O2-3).</td><td>Power-up / reboot, fibre reconnected, OLT port enabled, recovery after an outage.</td><td><code>XPON_ONU_DOWNSTREAM_SIGNAL_DETECTED</code></td></tr>
+    <tr><td>O2-3 → O4</td><td><code>From=O2,To=O4</code><br><code>From=O3,To=O4</code></td><td>Assign_ONU-ID received: the OLT discovered the serial number.</td><td>Normal activation step.</td><td>—</td></tr>
+    <tr><td>O4 → O5</td><td><code>From=O4,To=O5</code></td><td>Ranging_Time received; ONU in service.</td><td>Normal activation completed.</td><td><code>XPON_ONU_REGISTRATION</code></td></tr>
+    <tr><td>O2-3 / O4 → O1</td><td><code>From=O2,To=O1</code><br><code>From=O3,To=O1</code><br><code>From=O4,To=O1</code></td><td>Loss of downstream sync before activation completed.</td><td>Fibre cut, unplugged or dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault.</td><td><code>XPON_ONU_LOS</code></td></tr>
+    <tr><td>O4 → O2-3</td><td><code>From=O4,To=O2</code><br><code>From=O4,To=O3</code></td><td>TO1 expired during ranging, or Deactivate_ONU-ID received. ONU-ID discarded.</td><td>Ranging bursts not received (upstream power, ODN loss), ONU outside the ranging window, rogue ONU on the PON, registration ID rejected. Check <code>XPON_ALARM_SUF</code> and <code>XPON_ALARM_DACT</code>.</td><td>—</td></tr>
+    <tr><td>O5 → O2-3</td><td><code>From=O5,To=O2</code><br><code>From=O5,To=O3</code></td><td>Deactivate_ONU-ID received: OLT deregistered the ONU.</td><td>Registration ID or authentication rejected, operator deleted or re-provisioned the ONU, OLT detected excessive errors. Check <code>XPON_ALARM_DACT</code>.</td><td><code>XPON_ONU_DEREGISTRATION</code></td></tr>
+    <tr><td>O5 → O6</td><td><code>From=O5,To=O6</code></td><td>Loss of downstream sync in service; TO2 started.</td><td>Fibre cut, unplugged or dirty connector, Rx power below sensitivity, OLT port or PON card down, splitter fault, OLT protection switch-over. Followed by O6 → O5 or O6 → O1.</td><td><code>XPON_ONU_LOS</code>, <code>XPON_ONU_DEREGISTRATION</code></td></tr>
+    <tr><td>O6 → O5</td><td><code>From=O6,To=O5</code></td><td>Downstream sync re-acquired before TO2 expired; ONU resumes by itself with the same ONU-ID and equalisation delay.</td><td>Short downstream glitch. Frequent O5 → O6 → O5 points to a marginal optical budget; check <code>XPON_ALARM_SD/SF</code>.</td><td><code>XPON_ONU_REGISTRATION</code></td></tr>
+    <tr><td>O6 → O1</td><td><code>From=O6,To=O1</code></td><td>TO2 expired; ONU-ID and equalisation delay discarded, full re-activation.</td><td>Sustained outage: fibre cut, OLT reboot, PON card down.</td><td>—</td></tr>
+    <tr><td>O2-3 / O4 → O7</td><td><code>From=O2,To=O7</code><br><code>From=O3,To=O7</code><br><code>From=O4,To=O7</code></td><td>Disable_Serial_Number (disable) received for this serial number.</td><td>Rogue-ONU isolation, operator disable, subscriber suspension, serial number blocked on the OLT. Check <code>XPON_ALARM_DIS</code>.</td><td><code>XPON_ONU_EMERGENCY_STOP</code></td></tr>
+    <tr><td>O5 → O7</td><td><code>From=O5,To=O7</code></td><td>Disable_Serial_Number (disable) received while in service; the ONU leaves service.</td><td>Rogue-ONU isolation, operator disable, subscriber suspension, serial number blocked on the OLT. Check <code>XPON_ALARM_DIS</code>.</td><td><code>XPON_ONU_DEREGISTRATION</code>, <code>XPON_ONU_EMERGENCY_STOP</code></td></tr>
+    <tr><td>O7 → O1</td><td><code>From=O7,To=O1</code></td><td>Disable_Serial_Number (enable) received; ONU restarts activation.</td><td>Operator re-enabled the ONU, rogue condition cleared, subscriber reinstated.</td><td><code>XPON_ONU_EMERGENCY_STOP_CLEARED</code></td></tr>
+  </tbody>
+</table>
+
+<div class="note">An ONU whose serial number the OLT doesn't accept stays in O2-3 indefinitely: there is no O2-3 timeout, so no repeating transition is reported. It shows up as a last <code>XPON_ONU_STATE_CHANGE</code> of <code>To=O2</code> (or <code>To=O3</code>) with no later O4.</div>
+
+<h4 id="sec-t-xgs-other">2.6.3 Other Reported Pairs</h4>
+
+<p>Only the latest state is reported. When several transitions happen quickly, intermediate states are skipped and the pair is not one of the standard transitions above. Read it as the shortest standard path:</p>
+
+<table>
+  <thead><tr><th>Reported value</th><th>Likely path / meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>From=O1,To=O4</code> / <code>From=O1,To=O5</code></td><td>Activation steps not reported. Normal outcome.</td></tr>
+    <tr><td><code>From=O1&hellip;O4,To=O6</code></td><td>ONU reached O5 and lost downstream before O5 was reported. Unstable downstream; check <code>XPON_ALARM_LOS/LOF</code>.</td></tr>
+    <tr><td><code>From=O5,To=O1</code></td><td>O6 and TO2 expiry not reported (outage longer than TO2), or the PON stack was reset.</td></tr>
+    <tr><td><code>From=O5,To=O4</code></td><td>Deactivate_ONU-ID and re-discovery not reported.</td></tr>
+    <tr><td><code>From=O6,To=O2</code> / <code>O3</code> / <code>O4</code></td><td>TO2 expired and re-activation started before O1 was reported. Sustained outage.</td></tr>
+    <tr><td><code>From=O1,To=O7</code></td><td>ONU disabled right after it announced its serial number, or Emergency Stop restored at boot. Check <code>XPON_ALARM_DIS</code>.</td></tr>
+    <tr><td><code>From=O7,To=O2</code> / <code>O3</code> / <code>O4</code> / <code>O5</code></td><td>Re-enabled and re-activated before the earlier states were reported.</td></tr>
+    <tr><td><code>From=O2,To=O3</code> / <code>From=O3,To=O2</code></td><td>Both are O2-3. PON-stack internal sub-phase; no standard meaning.</td></tr>
+    <tr><td>Any value with <code>O8</code> or <code>O9</code></td><td>NG-PON2 wavelength tuning; not expected on XGS-PON. Check <code>Device.XPON.ONU.{i}.ANI.{i}.PONMode</code>.</td></tr>
+  </tbody>
+</table>
+
+<h4 id="sec-t-xgs-seq">2.6.4 Common XGS-PON Sequences</h4>
+
+<p>Read the <code>XPON_ONU_STATE_CHANGE</code> values in order (T2 <code>"use": "accumulate"</code>) and correlate with <code>XPON_ALARM_*</code> (&sect;2.3):</p>
+
+<table>
+  <thead><tr><th>Situation</th><th>XGS-PON state sequence</th></tr></thead>
+  <tbody>
+    <tr><td>Normal activation</td><td>O1→O2 (or O3)→O4→O5</td></tr>
+    <tr><td>Serial number not accepted by the OLT</td><td>Stuck at O2 or O3, no further change</td></tr>
+    <tr><td>Ranging fails</td><td>…→O4→O2/O3 repeating, with <code>XPON_ALARM_SUF</code></td></tr>
+    <tr><td>Rejected after activation (password / registration ID)</td><td>O4→O5→O2/O3, with <code>XPON_ALARM_DACT</code></td></tr>
+    <tr><td>Short downstream glitch</td><td>O5→O6→O5</td></tr>
+    <tr><td>Outage longer than TO2</td><td>O5→O6→O1→…→O5, with <code>XPON_ALARM_LOS/LOF</code></td></tr>
+    <tr><td>OLT deregistration</td><td>O5→O2/O3, with <code>XPON_ALARM_DACT</code></td></tr>
+    <tr><td>OLT disable / re-enable</td><td>O<em>x</em>→O7 … O7→O1, with <code>XPON_ALARM_DIS</code></td></tr>
+  </tbody>
+</table>
+
+<h3 id="sec-t-fmt">2.7 Value Formats &amp; Duplicate Suppression</h3>
+
+<table>
+<thead><tr><th>Format</th><th>Value</th><th>Used by</th><th>T2 call</th></tr></thead>
+<tbody>
+<tr><td>None</td><td>—</td><td>ONU milestone, PHY status, lifecycle, error events</td><td><code>t2_event_d(marker, 1)</code></td></tr>
+<tr><td>ONU state</td><td><code>From=O&lt;a&gt;,To=O&lt;b&gt;</code></td><td><code>XPON_ONU_STATE_CHANGE</code></td><td><code>t2_event_s(marker, value)</code></td></tr>
+<tr><td>Interface</td><td><code>Interface=&lt;ifname&gt;</code> (<code>unknown</code> if empty)</td><td><code>XPON_INTF_LINK_UP/DOWN</code></td><td><code>t2_event_s(marker, value)</code></td></tr>
+<tr><td>VEIP</td><td><code>Interface=&lt;ifname&gt;,Veip=&lt;n&gt;</code> (<code>unknown</code> if empty; n = Veip instance)</td><td><code>XPON_INTF_ADMIN_LOCK/UNLOCK</code></td><td><code>t2_event_s(marker, value)</code></td></tr>
+<tr><td>Alarm</td><td><code>RAISED,PM=&lt;n&gt;</code> / <code>CLEARED,PM=&lt;n&gt;</code> (n = PhysicalMedia instance)</td><td><code>XPON_ALARM_*</code></td><td><code>t2_event_s(marker, value)</code></td></tr>
+</tbody>
+</table>
+
+<table>
+<thead><tr><th>Mechanism</th><th>Applies to</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td>Edge detection (event-only)</td><td>ONU state, alarms, VEIP admin state</td><td>The reported value is compared with the last reported value; nothing is sent when unchanged. Polled reads update the data model only, so they neither raise an event nor hide one. Each instance is seeded on its first event from the value held just before it. Defaults (<em>O1</em>, all alarms <em>Inactive</em>, VEIP <em>Lock</em>) mean no false fault events; the first OMCI <em>Unlock</em> is reported, like REGISTRATION at boot.</td></tr>
+<tr><td>Transition detection</td><td>INTF_LINK_*, PHY_STATUS_*</td><td>Only on completed link transitions. PHY_STATUS follows the first link up / last link down.</td></tr>
+<tr><td>Latch (one per streak)</td><td>STATS_COLLECTION_FAILED, RBUS_PUBLISH_FAILED, HAL_WRONG_PON_MODE</td><td>Sent on the first failure only and re-armed by the next success, so retry and polling loops (state machine, start-up, TR-181 gets) can't flood T2.</td></tr>
+<tr><td>Pre-init drop</td><td>All</td><td>Events raised before telemetry is initialised or after shutdown are dropped.</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-t-prio">2.8 Priority Definitions</h3>
+
+<table>
+<thead><tr><th>Priority</th><th>Description</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><span class="badge badge-critical">Critical</span></td><td>Service-affecting: the ONU has lost (or can't get) WAN connectivity, or the component can't run.</td><td>Immediate investigation. Correlate with ONU state and optical levels.</td></tr>
+<tr><td><span class="badge badge-error">Error</span></td><td>Function degraded or a request failed, but service may continue.</td><td>Investigate if it persists or repeats.</td></tr>
+<tr><td><span class="badge badge-warning">Warning</span></td><td>Abnormal condition that may lead to an error.</td><td>Trend and alert on rate.</td></tr>
+<tr><td><span class="badge badge-info">Info</span></td><td>Normal lifecycle / recovery milestone.</td><td>Use for availability and MTTR analytics.</td></tr>
+</tbody>
+</table>
+
+<h3 id="sec-t-summary">2.9 Summary Statistics</h3>
+
+<table>
+<thead><tr><th>Category</th><th>Total Events</th><th>Critical</th><th>Error</th><th>Warning</th><th>Info</th></tr></thead>
+<tbody>
+<tr><td>ONU Activation (PLOAM) Events</td><td>7</td><td>2</td><td>0</td><td>1</td><td>4</td></tr>
+<tr><td>Interface Link Events</td><td>6</td><td>1</td><td>0</td><td>2</td><td>3</td></tr>
+<tr><td>PhysicalMedia Alarms (G.984.3 / G.987.3)</td><td>14</td><td>5</td><td>6</td><td>3</td><td>0</td></tr>
+<tr><td>System Lifecycle Events</td><td>4</td><td>2</td><td>0</td><td>0</td><td>2</td></tr>
+<tr><td>Error Events</td><td>7</td><td>1</td><td>4</td><td>2</td><td>0</td></tr>
+<tr class="summary-total"><td><strong>Total</strong></td><td><strong>38</strong></td><td><strong>11</strong></td><td><strong>10</strong></td><td><strong>8</strong></td><td><strong>9</strong></td></tr>
+</tbody>
+</table>
+
+<div class="note"><strong>Note:</strong> Each alarm event carries a raised/cleared state in its value. The listed priority is for the raised condition; cleared events are informational.</div>
+
+</body>
+</html>
