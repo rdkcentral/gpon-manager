@@ -215,6 +215,7 @@ _DML_PHY_MEDIA
     BOOLEAN 			Enable;
 #endif
     DML_PHYMEDIASTATUS_ENUM     Status;
+    ULONG                       StatusChangeTime;   /* CLOCK_MONOTONIC seconds of the last Status change (or row creation). */
     DML_REDUNDANCYSTATE_ENUM    RedundancyState;
 #if defined(WAN_MANAGER_UNIFICATION_ENABLED)
     CHAR                        Alias[65];

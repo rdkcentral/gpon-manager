@@ -165,6 +165,7 @@ void GponMgrDml_SetDefaultPhyMedia(DML_PHY_MEDIA_CTRL_T* gponPhyMediaData)
         gponPhyMedia->Enable = false;
 #endif
         gponPhyMedia->Status = NotPresent;
+        gponPhyMedia->StatusChangeTime = GponMgrDml_GetMonotonicSeconds();
         gponPhyMedia->RedundancyState = Active;
 #if defined(WAN_MANAGER_UNIFICATION_ENABLED)
         memset(gponPhyMedia->Alias, 0, sizeof(gponPhyMedia->Alias));

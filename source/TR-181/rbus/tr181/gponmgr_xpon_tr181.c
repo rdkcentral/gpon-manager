@@ -135,7 +135,7 @@ static rbusDataElement_t g_elements[] = {
     {"Device.XPON.ONU.{i}.ANI.{i}.Status", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.Alias", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, xpon_readonly_set_handler, NULL, NULL, xpon_subscribe, NULL}}, /* Read-only. Get not supported without WAN_MANAGER_UNIFICATION_ENABLED; access logs a warning. */
     {"Device.XPON.ONU.{i}.ANI.{i}.Name", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* CPE-assigned constant "ANI<i>". */
-    {"Device.XPON.ONU.{i}.ANI.{i}.LastChange", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Not supported without WAN_MANAGER_UNIFICATION_ENABLED; access logs a warning. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.LastChange", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Computed by GPON Manager from PhysicalMedia Status changes (HAL event or poll). */
     {"Device.XPON.ONU.{i}.ANI.{i}.PONMode", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* HAL PhysicalMedia.PonMode of the active medium; "Unknown" if not valid. */
     {"Device.XPON.ONU.{i}.ANI.{i}.TransceiverNumberOfEntries", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.SFPReferenceList", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_ani_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* Always empty: Device.SFPs.SFPCage is not implemented on this platform. */
@@ -190,7 +190,7 @@ static rbusDataElement_t g_elements[] = {
 
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortID", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.Direction", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* From HAL Gem.{i}.TrafficType: Bidirectional -> bidirectional, Unidirectional -> unidirectional (not a BBF value). */
-    {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortType", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* From HAL Gem.{i}.TrafficType: Bidirectional -> unicast, Unidirectional -> multicast. */
+    {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PortType", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}}, /* From HAL Gem.{i}.TrafficType: Bidirectional -> unicast, Unidirectional -> multicast (heuristic; HAL has no Gem.{i}.Type yet). */
 
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesSent", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
     {"Device.XPON.ONU.{i}.ANI.{i}.TC.GEM.Port.{i}.PM.FramesReceived", RBUS_ELEMENT_TYPE_PROPERTY, {xpon_gem_get_handler, NULL, NULL, NULL, xpon_subscribe, NULL}},
@@ -605,10 +605,12 @@ static rbusError_t xpon_transceiver_get_handler(rbusHandle_t handle, rbusPropert
         rbusValue_SetInt32(value, media->TxPower.SignalLevel);
     else if (strcmp(param, "Temperature") == 0)
     {
-        if (media->Temperature.CurrentTemp < -274)                  /* Below absolute zero: bad HAL data. */
+        /* HAL CurrentTemp is in 0.1 degC (vendor data model); BBF wants whole degC, rounded half away from zero. */
+        int temp = media->Temperature.CurrentTemp;
+        if (temp < -2740)                                           /* Below absolute zero: bad HAL data. */
             rc = XPON_BAD_VALUE;
         else
-            rbusValue_SetInt32(value, media->Temperature.CurrentTemp);
+            rbusValue_SetInt32(value, (temp >= 0 ? temp + 5 : temp - 5) / 10);
     }
     else if (strcmp(param, "Voltage") == 0)
     {
@@ -641,7 +643,7 @@ static rbusError_t xpon_transceiver_get_handler(rbusHandle_t handle, rbusPropert
 /**
  * @brief Get handler for ONU.{i}.ANI.{i}.* (Name, PONMode, SFPReferenceList, Status, TransceiverNumberOfEntries, Enable, Alias, LastChange).
  * @note Name ("ANI<i>") and SFPReferenceList ("") are constants; PONMode comes from HAL PhysicalMedia.PonMode.
- * @note Enable, Alias and LastChange need WAN_MANAGER_UNIFICATION_ENABLED.
+ * @note LastChange is computed from PhysicalMedia Status changes; Enable and Alias need WAN_MANAGER_UNIFICATION_ENABLED.
  * @param handle   RBUS handle (unused).
  * @param property Property being read; its value is set on success.
  * @param options  Get options (unused).
@@ -702,11 +704,14 @@ static rbusError_t xpon_ani_get_handler(rbusHandle_t handle, rbusProperty_t prop
     else if (strcmp(param, "Status") == 0)
         rc = media->Status == LowerLayerDown ? RBUS_ERROR_INVALID_OPERATION   /* No BBF ANI equivalent. */
                                              : xpon_set_enum(value, media->Status, g_ifStates, XPON_COUNT(g_ifStates));
+    else if (strcmp(param, "LastChange") == 0)
+    {
+        ULONG now = GponMgrDml_GetMonotonicSeconds();               /* Status stamped by the HAL event / poll parser. */
+        rbusValue_SetUInt32(value, now >= media->StatusChangeTime ? (uint32_t)(now - media->StatusChangeTime) : 0);
+    }
 #if defined(WAN_MANAGER_UNIFICATION_ENABLED)
     else if (strcmp(param, "Alias") == 0)
         rc = xpon_set_string(value, media->Alias, sizeof(media->Alias), 64);
-    else if (strcmp(param, "LastChange") == 0)
-        rbusValue_SetUInt32(value, media->LastChange);
     else if (strcmp(param, "Enable") == 0)
         rbusValue_SetBoolean(value, media->Enable != 0);
 #endif
@@ -1126,7 +1131,8 @@ static rbusError_t xpon_gem_totals_get_handler(rbusHandle_t handle, rbusProperty
  * @retval RBUS_ERROR_ELEMENT_DOES_NOT_EXIST      No GEM row for this instance.
  * @retval XPON_BAD_VALUE                         PortID > 65534.
  * @note Direction and PortType are derived from HAL TrafficType (Bidirectional -> bidirectional / unicast,
- *       Unidirectional -> unidirectional (not a BBF value) / multicast).
+ *       Unidirectional -> unidirectional (not a BBF value) / multicast). PortType is a heuristic until the HAL
+ *       schema provides Gem.{i}.Type.
  */
 static rbusError_t xpon_gem_get_handler(rbusHandle_t handle, rbusProperty_t property, rbusGetHandlerOptions_t *options)
 {
@@ -1177,7 +1183,9 @@ static rbusError_t xpon_gem_get_handler(rbusHandle_t handle, rbusProperty_t prop
         /* HAL gives no orientation for Unidirectional, so report it as-is: a value outside the BBF enumeration. */
         rbusValue_SetString(value, gem->TrafficType == Bidirectional ? "bidirectional" : "unidirectional");
     else if (strcmp(param, "PortType") == 0)
-        /* HAL TrafficType heuristic: bidirectional GEM ports carry unicast, unidirectional (downstream) ones multicast. */
+        /* HAL TrafficType heuristic: bidirectional GEM ports carry unicast, unidirectional (downstream) ones multicast.
+         * "broadcast" is never reported. Vendor stacks (e.g. Broadcom) expose Gem.{i}.Type (Unicast/Multicast/Broadcast);
+         * once the RDK HAL schema adds X_RDK_ONT.Gem.{i}.Type, map it here directly instead. */
         rbusValue_SetString(value, gem->TrafficType == Bidirectional ? "unicast" : "multicast");
     else
         rc = RBUS_ERROR_INVALID_OPERATION;
