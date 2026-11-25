@@ -318,7 +318,7 @@ Derived from transitions of the ONU activation state (`Device.XPON.ONU.{i}.ANI.{
 | `XPON_INTF_LINK_DOWN` | VEIP interface went down and WAN Manager was told. | Warning | `Interface=<ifname>` | Once per link-down. 0–2/day normally. |
 | `XPON_PHY_STATUS_UP` | Aggregate PHY state went up: the first VEIP link of the ONU came up (0→1 links up). | Info | — | Once per boot plus 1 per full recovery. |
 | `XPON_PHY_STATUS_DOWN` | Aggregate PHY state went down: the last VEIP link went down (1→0 links up). The ONU has no WAN connectivity. | Critical | — | Only on full loss of WAN connectivity. 0–2/day. |
-| `XPON_INTF_ADMIN_UNLOCK` | The OLT unlocked the VEIP over OMCI (AdministrativeState *Lock→Unlock*). An Unlock also starts the VEIP link state machine. The default is *Lock*, so the first Unlock after start raises this event. | Info | `Interface=<ifname>,Veip=<n>` | Once per boot per VEIP after OMCI provisioning, plus 1 per re-provisioning. |
+| `XPON_INTF_ADMIN_UNLOCK` | The OLT unlocked the VEIP over OMCI (AdministrativeState *Lock→Unlock*). An Unlock also starts the VEIP link state machine. The first event is compared with the state read from the HAL at start-up, so the first Unlock after a cold boot is reported; a GponManager restart with the VEIP already *Unlock* sends nothing. | Info | `Interface=<ifname>,Veip=<n>` | Once per boot per VEIP after OMCI provisioning, plus 1 per re-provisioning. |
 | `XPON_INTF_ADMIN_LOCK` | The OLT locked the VEIP over OMCI (AdministrativeState *Unlock→Lock*): the UNI is administratively disabled and won't pass traffic. | Warning | `Interface=<ifname>,Veip=<n>` | Only on OLT/operator action. Rare. |
 
 ### 2.3 PhysicalMedia Alarms (G.984.3 / G.987.3)
@@ -349,7 +349,7 @@ Raised from `ssp_main.c`, `GponMgrDml_Initialize()` and the PhysicalMedia `PonMo
 | Event Name | Meaning | Priority | Value | Estimated Frequency |
 |---|---|---|---|---|
 | `XPON_SYSTEM_INIT_SUCCESS` | `GponMgrDml_Initialize()` completed: DML data, HAL connection, initial HAL data and the internal controller are up. Also sent when the optional `Device.XPON` RBUS provider fails, because `Device.X_RDK_ONT` still works; that failure is reported separately as `XPON_ERROR_RBUS_REGISTER_FAILED`. | Info | — | Once per process start. |
-| `XPON_SYSTEM_INIT_FAILURE` | Initialisation failed (DML data/HAL init or `Cdm_Init`). The process may exit. | Critical | — | Only on startup failure. |
+| `XPON_SYSTEM_INIT_FAILURE` | Initialisation failed (DML data, HAL connection, initial HAL data read incl. an EPON module, internal controller, or `Cdm_Init`). The process may exit. | Critical | — | Only on startup failure. |
 | `XPON_SYSTEM_SHUTDOWN` | Graceful shutdown requested through the interactive `q` command loop. | Info | — | Only on graceful (non-daemon) shutdown. |
 | `XPON_SYSTEM_HAL_WRONG_PON_MODE` | Optical module reports an EPON `PonMode` that GPON Manager can't serve. `PonMode` has no HAL event, so this is a poll failure (the polled value is rejected). Latched: sent once until a valid ITU PON mode is reported. | Critical | — | Only on mis-provisioned hardware/HAL. |
 
@@ -501,7 +501,7 @@ Read the `XPON_ONU_STATE_CHANGE` values in order (T2 `"use": "accumulate"`) and 
 
 | Mechanism | Applies to | Behaviour |
 |---|---|---|
-| Edge detection (event-only) | ONU state, alarms, VEIP admin state | Only in the HAL push event callbacks. The pushed value is compared with the last *event* value (kept per PLOAM / PhysicalMedia / VEIP instance under the DML data lock); nothing sent when unchanged. Polled reads update the data model only, so they neither raise an event nor hide one. Each instance is seeded on its first event from the value held just before it. Defaults (*O1*, all alarms *Inactive*, VEIP *Lock*) mean no false fault events; the first OMCI *Unlock* is reported, like REGISTRATION at boot. |
+| Edge detection (event-only) | ONU state, alarms, VEIP admin state | Only in the HAL push event callbacks. The pushed value is compared with the last *event* value (kept per PLOAM / PhysicalMedia / VEIP instance under the DML data lock); nothing sent when unchanged. Polled reads update the data model only, so they neither raise an event nor hide one. Each instance is seeded on its first event from the data-model value held just before it (read from the HAL at start-up and refreshed by polls; *O1*, all alarms *Inactive* and VEIP *Lock* until the HAL reports otherwise). This avoids false fault events and repeated REGISTRATION/UNLOCK after a GponManager restart. Limitation: a poll that sees a change before the first push event of that instance absorbs that one transition. |
 | Transition detection | INTF_LINK_*, PHY_STATUS_* | Only on successful state-machine transitions. PHY_STATUS uses a mutex-protected count of links up (0↔1 edges). |
 | Latch (one per streak) | STATS_COLLECTION_FAILED, RBUS_PUBLISH_FAILED, HAL_WRONG_PON_MODE | Sent on the first failure only and re-armed by the next success, so retry and polling loops (500 ms state machine, init busy-loop, TR-181 gets) can't flood T2. |
 | Pre-init drop | All | Events raised before `xponMgr_telemetry_init()` or after cleanup are dropped silently. |

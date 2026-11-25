@@ -31,6 +31,8 @@ RdkGponManager is the RDK-B component that controls and monitors the xPON (GPON 
 | 08 | [TR-181 & Telemetry Summary (HTML)](GPON_TR181_Telemetry_Summary.html) | Simplified version for product/cloud teams: supported `Device.XPON` and `Device.X_RDK_ONT` parameters (name, description, type, access, example), telemetry events and XGS-PON state → event mapping with `XPON_ONU_STATE_CHANGE` values |
 | 09 | [Best-Match Mappings & BBF Deviations](09_XPON_TR181_BestMatch_Deviations.md) | Every supported `Device.XPON` parameter that is a best match or deviates from BBF TR-181 2.21, with the reason and how to close it |
 | 10 | [HAL Schema Extensions](10_HAL_Schema_Extensions.md) | Proposed RDK unified-HAL schema additions based on the Broadcom data model, tiered by effort, with the `Device.XPON` parameters each one enables |
+| 11 | [TR-181 Acceptance Criteria](11_TR181_Acceptance_Criteria.md) | MoSCoW acceptance criteria for the TR-181 user story: general data-model behaviour and every supported `Device.XPON` and `Device.X_RDK_ONT` parameter (type, access, default, range, example, usage) |
+| 12 | [Telemetry Acceptance Criteria](12_Telemetry_Acceptance_Criteria.md) | MoSCoW acceptance criteria for the telemetry user story: all 38 `XPON_*` T2 events (arguments, example call, priority, timing), ONU state → milestone rules for GPON and XGS-PON, and general T2 behaviour |
 | — | [XPON TR-181 Mapping](../XPON-TR181-MAPPING.md) | Field-by-field RDK `X_RDK_ONT` → BBF `Device.XPON` mapping notes |
 
 Numbering follows the EPON Manager `design_docs/` set (07 = telemetry design, 08 = TR-181 & telemetry reference) so that the two PON managers can be read side by side.
