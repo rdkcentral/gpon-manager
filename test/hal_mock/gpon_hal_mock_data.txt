@@ -1,0 +1,105 @@
+# GponManager mock HAL dataset (Device.X_RDK_ONT.*), see test/README.md.
+# Format: <name> <type> <value...>   type: string|boolean|int|unsignedInt|unsignedLong
+# @VEIP_IF@ is replaced by run_gpon_hal_test.sh with the VEIP interface name (default veip0).
+# The values below are the baseline that run_gpon_hal_test.sh asserts against.
+
+# ---- PhysicalMedia.1 (active SFP, XGS-PON) ---------------------------------
+Device.X_RDK_ONT.PhysicalMedia.1.Cage string SFP
+Device.X_RDK_ONT.PhysicalMedia.1.ModuleVendor string ACME
+Device.X_RDK_ONT.PhysicalMedia.1.ModuleName string XF10-MOCK
+Device.X_RDK_ONT.PhysicalMedia.1.ModuleVersion string V1.0
+Device.X_RDK_ONT.PhysicalMedia.1.ModuleFirmwareVersion string FW-1.2.3
+Device.X_RDK_ONT.PhysicalMedia.1.PonMode string XGS-PON
+Device.X_RDK_ONT.PhysicalMedia.1.Connector string SC
+Device.X_RDK_ONT.PhysicalMedia.1.NominalBitRateDownstream unsignedInt 9953
+Device.X_RDK_ONT.PhysicalMedia.1.NominalBitRateUpstream unsignedInt 9953
+Device.X_RDK_ONT.PhysicalMedia.1.Enable boolean true
+Device.X_RDK_ONT.PhysicalMedia.1.Status string Up
+Device.X_RDK_ONT.PhysicalMedia.1.RedundancyState string Active
+Device.X_RDK_ONT.PhysicalMedia.1.Alias string cpe-PON1
+Device.X_RDK_ONT.PhysicalMedia.1.LastChange unsignedInt 10
+Device.X_RDK_ONT.PhysicalMedia.1.LowerLayers string
+Device.X_RDK_ONT.PhysicalMedia.1.Upstream boolean true
+Device.X_RDK_ONT.PhysicalMedia.1.PerformanceThreshold.SignalFail unsignedInt 3
+Device.X_RDK_ONT.PhysicalMedia.1.PerformanceThreshold.SignalDegrade unsignedInt 6
+Device.X_RDK_ONT.PhysicalMedia.1.RxPower.SignalLevel int -1850
+Device.X_RDK_ONT.PhysicalMedia.1.RxPower.SignalLevelLowerThreshold int -2800
+Device.X_RDK_ONT.PhysicalMedia.1.RxPower.SignalLevelUpperThreshold int -800
+Device.X_RDK_ONT.PhysicalMedia.1.TxPower.SignalLevel int 250
+Device.X_RDK_ONT.PhysicalMedia.1.TxPower.SignalLevelLowerThreshold int 0
+Device.X_RDK_ONT.PhysicalMedia.1.TxPower.SignalLevelUpperThreshold int 700
+Device.X_RDK_ONT.PhysicalMedia.1.Voltage.VoltageLevel int 3300
+Device.X_RDK_ONT.PhysicalMedia.1.Bias.CurrentBias unsignedInt 8000
+Device.X_RDK_ONT.PhysicalMedia.1.Temperature.CurrentTemp int 452
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.RDI string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.PEE string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.LOS string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.LOF string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.DACT string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.DIS string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.MIS string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.MEM string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.SUF string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.SD string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.SF string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.LCDG string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.TF string Inactive
+Device.X_RDK_ONT.PhysicalMedia.1.Alarm.ROGUE string Inactive
+
+# ---- GTC counters -----------------------------------------------------------
+Device.X_RDK_ONT.Gtc.CorrectedFecBytes unsignedLong 1000
+Device.X_RDK_ONT.Gtc.CorrectedFecCodeWords unsignedLong 200
+Device.X_RDK_ONT.Gtc.UnCorrectedFecCodeWords unsignedLong 3
+Device.X_RDK_ONT.Gtc.TotalFecCodeWords unsignedLong 500000
+Device.X_RDK_ONT.Gtc.HecErrorCount unsignedLong 4
+Device.X_RDK_ONT.Gtc.PSBdHecErrors unsignedLong 5
+Device.X_RDK_ONT.Gtc.FrameHecErrors unsignedLong 6
+Device.X_RDK_ONT.Gtc.FramesLost unsignedLong 7
+
+# ---- PLOAM (16 hex digit serial = "ALCL" + 1A2B3C4D) ------------------------
+Device.X_RDK_ONT.Ploam.OnuId unsignedInt 5
+Device.X_RDK_ONT.Ploam.VendorId string ALCL
+Device.X_RDK_ONT.Ploam.SerialNumber string 414C434C1A2B3C4D
+Device.X_RDK_ONT.Ploam.RegistrationState string O1
+Device.X_RDK_ONT.Ploam.ActivationCounter unsignedInt 1
+Device.X_RDK_ONT.Ploam.TxMessageCount unsignedInt 120
+Device.X_RDK_ONT.Ploam.RxMessageCount unsignedInt 340
+Device.X_RDK_ONT.Ploam.MicErrors unsignedInt 0
+Device.X_RDK_ONT.Ploam.RegistrationTimers.TO1 unsignedInt 10000
+Device.X_RDK_ONT.Ploam.RegistrationTimers.TO2 unsignedInt 100
+
+# ---- OMCI -------------------------------------------------------------------
+Device.X_RDK_ONT.Omci.RxBaseLineMessageCountValid unsignedInt 800
+Device.X_RDK_ONT.Omci.RxExtendedMessageCountValid unsignedInt 90
+Device.X_RDK_ONT.Omci.MicErrors unsignedInt 0
+
+# ---- GEM port 1 -------------------------------------------------------------
+Device.X_RDK_ONT.Gem.1.PortId unsignedInt 1024
+Device.X_RDK_ONT.Gem.1.TrafficType string Bidirectional
+Device.X_RDK_ONT.Gem.1.TransmittedFrames unsignedLong 1111
+Device.X_RDK_ONT.Gem.1.ReceivedFrames unsignedLong 2222
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Ingress.Tagged string Single
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Ingress.S-VLAN.Vid unsignedInt 0
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Ingress.S-VLAN.Pcp unsignedInt 0
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Ingress.S-VLAN.Dei unsignedInt 0
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Ingress.C-VLAN.Vid unsignedInt 100
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Ingress.C-VLAN.Pcp unsignedInt 0
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Ingress.C-VLAN.Dei unsignedInt 0
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Egress.Tagged string Single
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Egress.S-VLAN.Vid unsignedInt 0
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Egress.S-VLAN.Pcp unsignedInt 0
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Egress.S-VLAN.Dei unsignedInt 0
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Egress.C-VLAN.Vid unsignedInt 100
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Egress.C-VLAN.Pcp unsignedInt 0
+Device.X_RDK_ONT.Gem.1.EthernetFlow.Egress.C-VLAN.Dei unsignedInt 0
+
+# ---- VEIP 1 (starts Locked / Down; the test unlocks it) ----------------------
+Device.X_RDK_ONT.Veip.1.MeId unsignedInt 1025
+Device.X_RDK_ONT.Veip.1.AdministrativeState string Lock
+Device.X_RDK_ONT.Veip.1.OperationalState string Down
+Device.X_RDK_ONT.Veip.1.InterDomainName string vlan_wan#Untagged-0-0-0
+Device.X_RDK_ONT.Veip.1.InterfaceName string @VEIP_IF@
+
+# ---- TR-069 -----------------------------------------------------------------
+Device.X_RDK_ONT.TR69.url string
+Device.X_RDK_ONT.TR69.AssociatedTag unsignedInt 0
