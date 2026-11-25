@@ -22,8 +22,11 @@
 #include "gponmgr_dml_hal.h"
 #include "gponmgr_telemetry.h"
 
-
-
+/* Alarm leaves allowed by subscribeEventSupportedList in the GPON HAL schema. */
+static const char* const k_pm_alarm_leaves[] = {
+    "RDI", "PEE", "LOS", "LOF", "DACT", "DIS", "MIS",
+    "MEM", "SUF", "SD", "SF", "LCDG", "TF", "ROGUE"
+};
 
 ANSC_STATUS GponMgr_subscribe_hal_events(void)
 {
@@ -51,11 +54,18 @@ ANSC_STATUS GponMgr_subscribe_hal_events(void)
                     break;
                 }
 
-                sprintf(strName, GPON_HAL_PM_ALARM, pGponPhy->uInstanceNumber);
-                ret = GponHal_Event_Subscribe(&eventcb_PhysicalMediaAlarmsAll, strName, JSON_SUBSCRIBE_ON_CHANGE);
+                for(size_t a = 0; a < sizeof(k_pm_alarm_leaves) / sizeof(k_pm_alarm_leaves[0]); a++)
+                {
+                    snprintf(strName, sizeof(strName), GPON_HAL_PM_ALARM, pGponPhy->uInstanceNumber, k_pm_alarm_leaves[a]);
+                    ret = GponHal_Event_Subscribe(&eventcb_PhysicalMediaAlarmsAll, strName, JSON_SUBSCRIBE_ON_CHANGE);
+                    if(ret != ANSC_STATUS_SUCCESS)
+                    {
+                        CcspTraceError(("%s %d - Failed to subscribe to %s\n", __FUNCTION__, __LINE__, strName ));
+                        break;
+                    }
+                }
                 if(ret != ANSC_STATUS_SUCCESS)
                 {
-                    CcspTraceError(("%s %d - Failed to subscribe to %s\n", __FUNCTION__, __LINE__, strName ));
                     break;
                 }
             }

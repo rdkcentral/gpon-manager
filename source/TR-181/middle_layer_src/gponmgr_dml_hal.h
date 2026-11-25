@@ -60,7 +60,8 @@
 #define GPON_HAL_PM_RX_POWER_UPPER_THR          "Device.X_RDK_ONT.PhysicalMedia.%ld.RxPower.SignalLevelUpperThreshold"
 #define GPON_HAL_PM_TX_POWER_LOWER_THR          "Device.X_RDK_ONT.PhysicalMedia.%ld.TxPower.SignalLevelLowerThreshold"
 #define GPON_HAL_PM_TX_POWER_UPPER_THR          "Device.X_RDK_ONT.PhysicalMedia.%ld.TxPower.SignalLevelUpperThreshold"
-#define GPON_HAL_PM_ALARM                       "Device.X_RDK_ONT.PhysicalMedia.%ld.Alarm"
+/* The HAL publishes alarms per leaf, so each leaf is subscribed individually. */
+#define GPON_HAL_PM_ALARM                       "Device.X_RDK_ONT.PhysicalMedia.%ld.Alarm.%s"
 
 #define GPON_HAL_GEM_ETH_INGRESS_CVLAN_VID      "Device.X_RDK_ONT.Gem.%ld.EthernetFlow.Ingress.C-VLAN.Vid"
 #define GPON_HAL_GEM_ETH_INGRESS_CVLAN_PCP      "Device.X_RDK_ONT.Gem.%ld.EthernetFlow.Ingress.C-VLAN.Pcp"
